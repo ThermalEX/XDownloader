@@ -1,0 +1,69 @@
+import '../models/source.dart';
+
+class SourceCatalog {
+  static const builtins = <ParseSource>[
+    ParseSource(
+      'xdl',
+      'X-Twitter Downloader',
+      'https://x-twitter-downloader.com/api/parse-video',
+      SourceKind.xdl,
+      'POST',
+      '',
+      true,
+    ),
+    ParseSource(
+      'fx',
+      'FxTwitter',
+      'https://api.fxtwitter.com/{user}/status/{id}',
+      SourceKind.fx,
+      'GET',
+      '',
+      true,
+    ),
+    ParseSource(
+      'syndication',
+      'X 官方嵌入',
+      'https://cdn.syndication.twimg.com/tweet-result?id={id}&lang=en&token=xdl',
+      SourceKind.syndication,
+      'GET',
+      '',
+      true,
+    ),
+    ParseSource(
+      'vx',
+      'VxTwitter',
+      'https://api.vxtwitter.com/{user}/status/{id}',
+      SourceKind.vx,
+      'GET',
+      '',
+      true,
+    ),
+    ParseSource(
+      'twitsave',
+      'TwitSave',
+      'https://twitsave.com/info?url={urlenc}',
+      SourceKind.scrape,
+      'GET',
+      '',
+      true,
+    ),
+    ParseSource(
+      'snap',
+      'SnapTwitter',
+      'https://snaptwitter.com/action.php',
+      SourceKind.snap,
+      'POST',
+      '',
+      true,
+    ),
+    ParseSource(
+      'savetwitter',
+      'SaveTwitter',
+      'https://savetwitter.net/api/ajaxSearch',
+      SourceKind.scrape,
+      'POST',
+      'q={urlenc}&lang=en',
+      true,
+    ),
+  ];
+}

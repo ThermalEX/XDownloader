@@ -1,0 +1,4 @@
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-path name="downloads" path="Download/XDownloader/" />
+    <cache-path name="app_updates" path="xdl-install/" />
+</paths>
