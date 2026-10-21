@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_shell.dart';
 import '../../core/models/app_settings.dart';
 import '../../data/repositories/settings_repository.dart';
+import 'settings_group.dart';
 
 class AppearanceScreen extends StatelessWidget {
   const AppearanceScreen({super.key, required this.repository});
@@ -20,43 +21,38 @@ class AppearanceScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DropdownButtonFormField<AppThemeMode>(
-                  borderRadius: BorderRadius.circular(20),
-                  key: const Key('theme_mode'),
-                  initialValue: value.themeMode,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: '主题模式'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: AppThemeMode.system,
-                      child: Text('跟随系统'),
-                    ),
-                    DropdownMenuItem(
-                      value: AppThemeMode.light,
-                      child: Text('浅色'),
-                    ),
-                    DropdownMenuItem(
-                      value: AppThemeMode.dark,
-                      child: Text('深色'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) edit((s) => s.copyWith(themeMode: v));
-                  },
+              SettingsPanel(
+                title: '主题模式',
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: DropdownButtonFormField<AppThemeMode>(
+                    borderRadius: BorderRadius.circular(20),
+                    key: const Key('theme_mode'),
+                    initialValue: value.themeMode,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '主题模式'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AppThemeMode.system,
+                        child: Text('跟随系统'),
+                      ),
+                      DropdownMenuItem(
+                        value: AppThemeMode.light,
+                        child: Text('浅色'),
+                      ),
+                      DropdownMenuItem(
+                        value: AppThemeMode.dark,
+                        child: Text('深色'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) edit((s) => s.copyWith(themeMode: v));
+                    },
+                  ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                child: Text(
-                  '主题颜色',
-                  style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(color: Theme.of(context).colorScheme.primary),
-                ),
-              ),
-              Card.filled(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
+              SettingsPanel(
+                title: '主题颜色',
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -100,12 +96,14 @@ class AppearanceScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                title: const Text('动态取色'),
-                subtitle: const Text('使用系统壁纸配色，不支持时使用主题色'),
-                value: value.useDynamicColor,
-                onChanged: (v) => edit((s) => s.copyWith(useDynamicColor: v)),
+              SettingsPanel(
+                title: '系统配色',
+                child: SwitchListTile(
+                  title: const Text('动态取色'),
+                  subtitle: const Text('使用系统壁纸配色，不支持时使用主题色'),
+                  value: value.useDynamicColor,
+                  onChanged: (v) => edit((s) => s.copyWith(useDynamicColor: v)),
+                ),
               ),
             ],
           );

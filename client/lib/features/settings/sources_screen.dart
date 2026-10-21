@@ -9,6 +9,8 @@ import '../../core/parsing/parse_client.dart';
 import 'source_editor_screen.dart';
 import 'source_health_controller.dart';
 
+import 'settings_group.dart';
+
 class SourcesScreen extends StatefulWidget {
   const SourcesScreen({
     super.key,
@@ -94,88 +96,103 @@ class _SourcesScreenState extends State<SourcesScreen> {
       child: ListenableBuilder(
         listenable: Listenable.merge([repository, _health]),
         builder: (context, _) => ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            SwitchListTile(
-              title: const Text('失败后自动换源'),
-              value: repository.autoFallback,
-              onChanged: (value) =>
-                  runAction(context, () => repository.setFallback(value)),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('先尝试选中的源；开启自动换源后，失败时尝试其他源。'),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            SettingsPanel(
+              title: '解析行为',
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FilledButton.tonalIcon(
-                    onPressed: _health.checkingAll
-                        ? null
-                        : () => _health.checkAll(repository.list.toList()),
-                    icon: const Icon(Icons.network_check),
-                    label: Text(_health.checkingAll ? '正在检测全部…' : '检测全部'),
+                  SwitchListTile(
+                    title: const Text('失败后自动换源'),
+                    value: repository.autoFallback,
+                    onChanged: (value) =>
+                        runAction(context, () => repository.setFallback(value)),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('用示例视频检测解析能力；结果仅供参考，不会切换当前源。'),
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('先尝试选中的源；开启自动换源后，失败时尝试其他源。'),
+                  ),
                 ],
               ),
             ),
-            for (final source in repository.list)
-              ListTile(
-                title: Text(source.name),
-                subtitle: Column(
+            SettingsPanel(
+              title: '源检测',
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      source.builtin ? '内置解析源' : source.endpoint,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    FilledButton.tonalIcon(
+                      onPressed: _health.checkingAll
+                          ? null
+                          : () => _health.checkAll(repository.list.toList()),
+                      icon: const Icon(Icons.network_check),
+                      label: Text(_health.checkingAll ? '正在检测全部…' : '检测全部'),
                     ),
-                    if (_health.checking(source.id))
-                      const Text('正在检测…')
-                    else if (_health.result(source.id) case final result?)
-                      Text(result),
+                    const SizedBox(height: 8),
+                    const Text('用示例视频检测解析能力；结果仅供参考，不会切换当前源。'),
                   ],
                 ),
-                leading: Icon(
-                  repository.currentId == source.id
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                ),
-                onTap: () =>
-                    runAction(context, () => repository.select(source.id)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: '检测 ${source.name}',
-                      onPressed: _health.checking(source.id)
-                          ? null
-                          : () => _health.check(source),
-                      icon: _health.checking(source.id)
-                          ? const SizedBox.square(
-                              dimension: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.network_check),
-                    ),
-                    if (!source.builtin)
+              ),
+            ),
+            for (final source in repository.list)
+              SettingsPanel(
+                child: ListTile(
+                  title: Text(source.name),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        source.builtin ? '内置解析源' : source.endpoint,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_health.checking(source.id))
+                        const Text('正在检测…')
+                      else if (_health.result(source.id) case final result?)
+                        Text(result),
+                    ],
+                  ),
+                  leading: Icon(
+                    repository.currentId == source.id
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                  ),
+                  onTap: () =>
+                      runAction(context, () => repository.select(source.id)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       IconButton(
-                        tooltip: '编辑解析源',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => SourceEditorScreen(
-                              repository: repository,
-                              source: source,
+                        tooltip: '检测 ${source.name}',
+                        onPressed: _health.checking(source.id)
+                            ? null
+                            : () => _health.check(source),
+                        icon: _health.checking(source.id)
+                            ? const SizedBox.square(
+                                dimension: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.network_check),
+                      ),
+                      if (!source.builtin)
+                        IconButton(
+                          tooltip: '编辑解析源',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => SourceEditorScreen(
+                                repository: repository,
+                                source: source,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
           ],

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/bootstrap.dart';
 import '../../app/app_shell.dart';
 import '../../data/updates/github_release_client.dart';
+import 'settings_group.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key, required this.dependencies});
@@ -12,31 +13,73 @@ class AboutScreen extends StatelessWidget {
     appBar: AppBar(title: const Text('关于')),
     body: SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         children: [
-          const Icon(Icons.downloading, size: 56),
-          const SizedBox(height: 16),
-          Text('XDownloader', style: Theme.of(context).textTheme.headlineSmall),
-          ListenableBuilder(
-            listenable: dependencies.updates,
-            builder: (context, _) => Text(
-              '${dependencies.updates.installed?.versionName ?? '版本暂不可用'} · Flutter Material 3',
-            ),
-          ),
-          TextButton.icon(
-            onPressed: () => runAction(
-              context,
-              () => dependencies.updates.openPage(
-                GitHubReleaseClient.repositoryPage,
+          SettingsPanel(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Image.asset(
+                    'assets/branding/app_icon.png',
+                    width: 120,
+                    height: 120,
+                    cacheWidth: 384,
+                    semanticLabel: 'XDownloader 图标',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'XDownloader',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  ListenableBuilder(
+                    listenable: dependencies.updates,
+                    builder: (context, _) => Text(
+                      dependencies.updates.installed?.versionName ?? '版本暂不可用',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ),
             ),
-            icon: const Icon(Icons.code),
-            label: const Text('GitHub 源码仓库'),
           ),
-          const SizedBox(height: 24),
-          const Text('从 X 帖子中提取视频，保存到公共下载文件夹。后台下载由 Android 系统管理，离开应用后仍可继续。'),
-          const SizedBox(height: 16),
-          const Text('请仅保存你有权使用的内容。'),
+          SettingsPanel(
+            child: ListTile(
+              leading: const SettingsIcon(Icons.person_outline),
+              title: const Text('作者'),
+              subtitle: const Text('ThermalEX'),
+            ),
+          ),
+          const SettingsPanel(
+            child: ListTile(
+              leading: SettingsIcon(Icons.layers_outlined),
+              title: Text('技术栈'),
+              subtitle: Text('Flutter · Dart · Material 3\nAndroid · Kotlin'),
+            ),
+          ),
+          SettingsPanel(
+            child: ListTile(
+              leading: const SettingsIcon(Icons.code),
+              title: const Text('GitHub 源码仓库'),
+              subtitle: const Text('ThermalEX/XDownloader'),
+              trailing: const Icon(Icons.open_in_new),
+              onTap: () => runAction(
+                context,
+                () => dependencies.updates.openPage(
+                  GitHubReleaseClient.repositoryPage,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              '从 X 帖子提取视频并保存到公共下载文件夹。请仅保存你有权使用的内容。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
           if (dependencies.migration?.errors.isNotEmpty ?? false) ...[
             const SizedBox(height: 24),
             const Text('部分旧数据未能导入，原数据已保留；下次启动会重试。'),

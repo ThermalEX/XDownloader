@@ -4,6 +4,8 @@ import '../../app/bootstrap.dart';
 import 'sources_screen.dart';
 import 'naming_settings_screen.dart';
 
+import 'settings_group.dart';
+
 class RuleSettingsScreen extends StatelessWidget {
   const RuleSettingsScreen({super.key, required this.dependencies});
   final AppDependencies dependencies;
@@ -20,36 +22,43 @@ class RuleSettingsScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              ListTile(
-                leading: const Icon(Icons.drive_file_rename_outline),
-                title: const Text('重命名规则'),
-                subtitle: Text(
-                  dependencies.settings.value.useOriginalFileName
-                      ? '原始标题'
-                      : dependencies.settings.value.fileNameTemplate,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        NamingSettingsScreen(repository: dependencies.settings),
+              SettingsPanel(
+                title: '命名',
+                child: ListTile(
+                  leading: const Icon(Icons.drive_file_rename_outline),
+                  title: const Text('重命名规则'),
+                  subtitle: Text(
+                    dependencies.settings.value.useOriginalFileName
+                        ? '原始标题'
+                        : dependencies.settings.value.fileNameTemplate,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => NamingSettingsScreen(
+                        repository: dependencies.settings,
+                      ),
+                    ),
                   ),
                 ),
               ),
-              ListTile(
-                title: const Text('下载源'),
-                leading: const Icon(Icons.dns_outlined),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => SourcesScreen(
-                      repository: dependencies.sources,
-                      parser: dependencies.parser,
-                      readClipboard: dependencies.readClipboard,
+              SettingsPanel(
+                title: '解析',
+                child: ListTile(
+                  title: const Text('下载源'),
+                  leading: const Icon(Icons.dns_outlined),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => SourcesScreen(
+                        repository: dependencies.sources,
+                        parser: dependencies.parser,
+                        readClipboard: dependencies.readClipboard,
+                      ),
                     ),
                   ),
                 ),

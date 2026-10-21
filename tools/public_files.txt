@@ -16,9 +16,13 @@ client/android/app/src/main/kotlin/com/xdl/app/SavedNotifications.kt
 client/android/app/src/main/kotlin/com/xdl/app/ShareGateway.kt
 client/android/app/src/main/kotlin/com/xdl/app/UpdateInstallGateway.kt
 client/android/app/src/main/kotlin/com/xdl/app/UpdatePackageVerifier.kt
+client/android/app/src/main/res/drawable-hdpi/ic_launcher_foreground.png
+client/android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png
 client/android/app/src/main/res/drawable-v21/launch_background.xml
+client/android/app/src/main/res/drawable-xhdpi/ic_launcher_foreground.png
+client/android/app/src/main/res/drawable-xxhdpi/ic_launcher_foreground.png
+client/android/app/src/main/res/drawable-xxxhdpi/ic_launcher_foreground.png
 client/android/app/src/main/res/drawable/launch_background.xml
-client/android/app/src/main/res/drawable/launcher_foreground.xml
 client/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
 client/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
 client/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
@@ -36,6 +40,7 @@ client/android/build.gradle.kts
 client/android/gradle.properties
 client/android/gradle/wrapper/gradle-wrapper.properties
 client/android/settings.gradle.kts
+client/assets/branding/app_icon.png
 client/integration_test/app_flow_test.dart
 client/integration_test/app_updates_test.dart
 client/integration_test/legacy_migration_test.dart
@@ -46,6 +51,7 @@ client/lib/app/app_shell.dart
 client/lib/app/app_theme.dart
 client/lib/app/bootstrap.dart
 client/lib/app/dynamic_palette.dart
+client/lib/app/favorite_icon.dart
 client/lib/core/models/app_failure.dart
 client/lib/core/models/app_settings.dart
 client/lib/core/models/app_update.dart
@@ -118,6 +124,7 @@ client/test/data/source_exchange_test.dart
 client/test/data/source_repository_test.dart
 client/test/data/update_repository_test.dart
 client/test/features/app_updates_test.dart
+client/test/features/bottom_composer_test.dart
 client/test/features/download_history_test.dart
 client/test/features/downloads_test.dart
 client/test/features/favorites_test.dart

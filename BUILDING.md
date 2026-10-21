@@ -25,3 +25,7 @@ flutter --no-version-check test integration_test/app_flow_test.dart -d SERIAL --
 Native update tests additionally need generated probe-only APK fixtures. Run `python tool/build_update_probe_fixtures.py --help`, generate them into an ignored directory, copy `fixtures.json` to `android/app/src/probe/assets/update_probe_fixtures.json`, and run `integration_test/app_updates_test.dart`. These fixtures and probe methods must be absent from production.
 
 The update protocol uses `update.json` and `SHA256SUMS.txt` attached to each GitHub Release. Build both APKs with the same version and signing certificate, then use `tools/make_update_manifest.py --help` to generate matching metadata. Stable releases must not be marked prerelease; Beta tags use `vX.Y.Z-beta.N` and GitHub prerelease. All channels share a strictly increasing Android versionCode.
+
+## App icon
+
+The transparent source is `client/assets/branding/app_icon.png`. From `client/`, run `dart run flutter_launcher_icons` to regenerate the Android launcher and adaptive foreground densities using the pinned development tool. Keep alpha and the configured inset; this tool is not an application runtime dependency.

@@ -73,6 +73,20 @@ class PublicExportTest(unittest.TestCase):
             self.write('client/test/fixtures/session.' + suffix, 'private session')
             self.commit()
             with self.assertRaises(exporter.ExportError): self.export()
+    def test_reviewed_branding_and_generated_foreground_are_exported(self):
+        import base64
+        png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=')
+        paths = ['client/assets/branding/app_icon.png',
+                 'client/android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png']
+        for name in paths:
+            path = self.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(png)
+        with (self.source / 'tools/public_files.txt').open('a', encoding='utf-8') as stream:
+            stream.write('\n'.join(paths) + '\n')
+        self.commit()
+        target = self.export()
+        for name in paths: self.assertEqual((target / name).read_bytes(), png)
     def test_export_retains_all_source_apks_byte_for_byte(self):
         self.write('releases/old.apk', 'preserve bytes')
         self.commit()

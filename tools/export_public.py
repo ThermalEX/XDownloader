@@ -13,7 +13,10 @@ TEMPLATES = {
     'CLIENT_AGENTS.md': 'client/AGENTS.md',
 }
 ROOT_FILES = {'client/.gitignore', 'client/.metadata', 'client/analysis_options.yaml',
-              'client/pubspec.yaml', 'client/pubspec.lock', 'client/AGENTS.md'}
+              'client/pubspec.yaml', 'client/pubspec.lock', 'client/AGENTS.md',
+              'client/assets/branding/app_icon.png'}
+ICON_FOREGROUNDS = {'client/android/app/src/main/res/drawable-' + density + '/ic_launcher_foreground.png'
+                    for density in ('mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi')}
 PREFIXES = ('client/lib/', 'client/test/', 'client/integration_test/', 'client/tool/', 'client/android/')
 INVENTORY = 'tools/public_files.txt'
 TOOLS = {INVENTORY, 'tools/export_public.py', 'tools/make_update_manifest.py',
@@ -49,7 +52,7 @@ def allowed(path):
     if name in ('key.properties', 'local.properties', '.env') or name.startswith('.env.') or suffix in FORBIDDEN_SUFFIXES:
         raise ExportError('Forbidden public file: ' + path)
     if suffix == '.png':
-        if path.startswith('client/android/app/src/main/res/mipmap-') and name == 'ic_launcher.png':
+        if path in ICON_FOREGROUNDS or (path.startswith('client/android/app/src/main/res/mipmap-') and name == 'ic_launcher.png'):
             return True
         raise ExportError('Unreviewed binary file: ' + path)
     if suffix in SUFFIXES or name == '.gitignore':

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'bootstrap.dart';
+import 'favorite_icon.dart';
 import '../core/models/app_failure.dart';
 import '../features/home/home_controller.dart';
 import '../features/home/home_screen.dart';
@@ -90,25 +91,38 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.dependencies.updates,
     builder: (context, _) => Scaffold(
-      appBar: AppBar(
-        title: Text(['XDownloader', '下载', '收藏', '设置'][index]),
-        actions: [
-          if (widget.dependencies.updates.result?.candidate != null)
-            IconButton(
-              tooltip: '发现新版本',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      AppUpdatesScreen(repository: widget.dependencies.updates),
-                ),
-              ),
-              icon: const Icon(Icons.system_update_outlined),
+      appBar:
+          MediaQuery.viewInsetsOf(context).bottom > 0 &&
+              MediaQuery.sizeOf(context).height -
+                      MediaQuery.viewInsetsOf(context).bottom <
+                  240
+          ? null
+          : AppBar(
+              title: Text(['XDownloader', '下载', '收藏', '设置'][index]),
+              actions: [
+                if (index == 0) HomeSourceAction(controller: home),
+                if (widget.dependencies.updates.result?.candidate != null)
+                  IconButton(
+                    tooltip: '发现新版本',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => AppUpdatesScreen(
+                          repository: widget.dependencies.updates,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.system_update_outlined),
+                  ),
+              ],
             ),
-        ],
-      ),
       body: SafeArea(
-        top: false,
+        top:
+            MediaQuery.viewInsetsOf(context).bottom > 0 &&
+            MediaQuery.sizeOf(context).height -
+                    MediaQuery.viewInsetsOf(context).bottom <
+                240,
+        bottom: false,
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -143,43 +157,78 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) {
-          if (MediaQuery.disableAnimationsOf(context)) {
-            _pages.jumpToPage(value);
-          } else {
-            unawaited(
-              _pages.animateToPage(
-                value,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
+      floatingActionButton:
+          index == 0 &&
+              MediaQuery.sizeOf(context).height -
+                      MediaQuery.viewInsetsOf(context).bottom >=
+                  240
+          ? HomeFavoriteAction(home: home)
+          : null,
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: switch (index) {
+                    0 => HomeComposer(controller: home),
+                    2 => FavoritesActions(dependencies: widget.dependencies),
+                    _ => const SizedBox.shrink(),
+                  },
+                ),
               ),
-            );
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            key: Key('nav_home'),
-            icon: Icon(Icons.link),
-            label: '解析',
+              if (MediaQuery.viewInsetsOf(context).bottom == 0)
+                NavigationBar(
+                  selectedIndex: index,
+                  onDestinationSelected: (value) {
+                    if (MediaQuery.disableAnimationsOf(context)) {
+                      _pages.jumpToPage(value);
+                    } else {
+                      unawaited(
+                        _pages.animateToPage(
+                          value,
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                        ),
+                      );
+                    }
+                  },
+                  destinations: [
+                    const NavigationDestination(
+                      key: Key('nav_home'),
+                      icon: Icon(Icons.link),
+                      label: '解析',
+                    ),
+                    const NavigationDestination(
+                      key: Key('nav_downloads'),
+                      icon: Icon(Icons.download_outlined),
+                      label: '下载',
+                    ),
+                    NavigationDestination(
+                      key: const Key('nav_favorites'),
+                      icon: const Icon(Icons.favorite_border),
+                      selectedIcon: Icon(
+                        Icons.favorite,
+                        color: savedHeartColor(context),
+                      ),
+                      label: '收藏',
+                    ),
+                    const NavigationDestination(
+                      key: Key('nav_settings'),
+                      icon: Icon(Icons.settings_outlined),
+                      label: '设置',
+                    ),
+                  ],
+                ),
+            ],
           ),
-          NavigationDestination(
-            key: Key('nav_downloads'),
-            icon: Icon(Icons.download_outlined),
-            label: '下载',
-          ),
-          NavigationDestination(
-            key: Key('nav_favorites'),
-            icon: Icon(Icons.bookmark_outline),
-            label: '收藏',
-          ),
-          NavigationDestination(
-            key: Key('nav_settings'),
-            icon: Icon(Icons.settings_outlined),
-            label: '设置',
-          ),
-        ],
+        ),
       ),
     ),
   );
