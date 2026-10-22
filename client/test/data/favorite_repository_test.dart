@@ -18,6 +18,41 @@ class FailingFavoriteStore extends MemorySnapshotStore {
 
 void main() {
   test(
+    'default order and undo retain neighbors metadata and concurrent additions',
+    () async {
+      final store = FailingFavoriteStore();
+      final repo = FavoriteRepository(store);
+      await repo.initialize();
+      expect(repo.sort, FavoriteSort.defaultOrder);
+      await repo.add('https://x.com/a/status/123456', title: 'One');
+      await repo.add('https://x.com/b/status/234567', title: 'Two');
+      await repo.update('123456', title: 'Edited', category: '音乐');
+      final original = repo.items.last;
+      final removed = (await repo.removeForUndo('123456'))!;
+      await repo.add('https://x.com/c/status/345678', title: 'Three');
+      store.fail = true;
+      await expectLater(repo.restore(removed), throwsA(isA<AppFailure>()));
+      expect(repo.items.map((f) => f.postId), ['345678', '234567']);
+      store.fail = false;
+      await repo.restore(removed);
+      expect(repo.items.map((f) => f.postId), ['345678', '234567', '123456']);
+      expect(repo.items.last.toJson(), original.toJson());
+      final reloaded = FavoriteRepository(store);
+      await reloaded.initialize();
+      expect(reloaded.sort, FavoriteSort.defaultOrder);
+      expect(reloaded.items.last.toJson(), original.toJson());
+      final duplicate = (await repo.removeForUndo('123456'))!;
+      await repo.add('https://x.com/a/status/123456', title: 'New entry');
+      await repo.restore(duplicate);
+      expect(
+        repo.items.where((f) => f.postId == '123456').single.title,
+        'New entry',
+      );
+      repo.dispose();
+      reloaded.dispose();
+    },
+  );
+  test(
     'durable favorite sort and category recover after invalid sort snapshot',
     () async {
       final dir = await Directory.systemTemp.createTemp('xdl-favorite-sort-');
@@ -103,7 +138,7 @@ void main() {
         repo.setSort(FavoriteSort.title),
         throwsA(isA<AppFailure>()),
       );
-      expect(repo.sort, FavoriteSort.newest);
+      expect(repo.sort, FavoriteSort.defaultOrder);
       expect(repo.items.single.title, '原名');
       expect(repo.categories, isEmpty);
       repo.dispose();

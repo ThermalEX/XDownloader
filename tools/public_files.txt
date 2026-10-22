@@ -83,6 +83,7 @@ client/lib/features/downloads/material_player_controls.dart
 client/lib/features/downloads/player_orientation_button.dart
 client/lib/features/downloads/video_preview_screen.dart
 client/lib/features/downloads/video_thumbnail.dart
+client/lib/features/favorites/favorite_filter_sheet.dart
 client/lib/features/favorites/favorites_screen.dart
 client/lib/features/home/home_controller.dart
 client/lib/features/home/home_screen.dart
@@ -127,6 +128,7 @@ client/test/features/app_updates_test.dart
 client/test/features/bottom_composer_test.dart
 client/test/features/download_history_test.dart
 client/test/features/downloads_test.dart
+client/test/features/favorite_controls_test.dart
 client/test/features/favorites_test.dart
 client/test/features/home_test.dart
 client/test/features/media_result_view_test.dart

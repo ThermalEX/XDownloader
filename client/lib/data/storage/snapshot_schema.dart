@@ -35,7 +35,12 @@ class SnapshotSchema {
           }
         case 'favorites':
           if (data['sort'] != null &&
-              !const ['newest', 'oldest', 'title'].contains(data['sort'])) {
+              !const [
+                'defaultOrder',
+                'newest',
+                'oldest',
+                'title',
+              ].contains(data['sort'])) {
             return false;
           }
           final ids = <String>{};

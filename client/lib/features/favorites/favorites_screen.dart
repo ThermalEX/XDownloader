@@ -8,6 +8,7 @@ import '../../core/models/app_failure.dart';
 import '../../core/models/favorite_link.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../core/parsing/post_link.dart';
+import 'favorite_filter_sheet.dart';
 
 void _ensureVisible(AppDependencies dependencies) {
   if (dependencies.settings.value.privacyMode) {
@@ -59,6 +60,56 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen> {
   AppDependencies get dependencies => widget.dependencies;
   String? _category;
+  Future<void> _filter() => runAction(context, () async {
+    _ensureVisible(dependencies);
+    final choice = await showModalBottomSheet<(FavoriteSort, String?)>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => FavoriteFilterSheet(
+        favorites: dependencies.favorites,
+        settings: dependencies.settings,
+        category: _category,
+      ),
+    );
+    if (choice == null || !mounted) return;
+    _ensureVisible(dependencies);
+    await dependencies.favorites.setSort(choice.$1);
+    if (mounted) {
+      _ensureVisible(dependencies);
+      setState(() => _category = choice.$2);
+    }
+  });
+
+  Future<void> _remove(String id) => runAction(context, () async {
+    _ensureVisible(dependencies);
+    final removed = await dependencies.favorites.removeForUndo(id);
+    if (!mounted || removed == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('已取消收藏'),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: '撤回',
+          onPressed: () {
+            if (mounted) {
+              runAction(context, () async {
+                _ensureVisible(dependencies);
+                await dependencies.favorites.restore(removed);
+              });
+            }
+          },
+        ),
+      ),
+    );
+  });
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([
@@ -83,89 +134,33 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
         );
       }
-      final groups = dependencies.favorites.categories;
-      final selected =
-          _category == null || _category!.isEmpty || groups.contains(_category)
-          ? _category
-          : null;
+      final selected = _category;
+      final active =
+          dependencies.favorites.sort != FavoriteSort.defaultOrder ||
+          selected != null;
+      final colors = Theme.of(context).colorScheme;
       return Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<FavoriteSort>(
-                    key: const Key('favorite_sort'),
-                    isExpanded: true,
-                    value: dependencies.favorites.sort,
-                    underline: const SizedBox.shrink(),
-                    items: const [
-                      DropdownMenuItem(
-                        value: FavoriteSort.newest,
-                        child: Text('最新收藏'),
-                      ),
-                      DropdownMenuItem(
-                        value: FavoriteSort.oldest,
-                        child: Text('最早收藏'),
-                      ),
-                      DropdownMenuItem(
-                        value: FavoriteSort.title,
-                        child: Text('名称顺序'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        runAction(context, () async {
-                          _ensureVisible(dependencies);
-                          await dependencies.favorites.setSort(value);
-                        });
-                      }
-                    },
-                  ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: IconButton(
+                key: const Key('favorite_filter'),
+                tooltip: active ? '排序与分类（已筛选）' : '排序与分类',
+                isSelected: active,
+                style: IconButton.styleFrom(
+                  backgroundColor: active
+                      ? colors.primaryContainer
+                      : Colors.transparent,
+                  foregroundColor: active
+                      ? colors.primary
+                      : colors.onSurfaceVariant,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButton<String>(
-                    key: const Key('favorite_category_filter'),
-                    isExpanded: true,
-                    value: selected == null ? 'all' : 'category:$selected',
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      const DropdownMenuItem(value: 'all', child: Text('全部分类')),
-                      const DropdownMenuItem(
-                        value: 'category:',
-                        child: Text('未分类'),
-                      ),
-                      for (final group in groups)
-                        DropdownMenuItem(
-                          value: 'category:$group',
-                          child: ListenableBuilder(
-                            listenable: dependencies.settings,
-                            builder: (context, _) => Text(
-                              dependencies.settings.value.privacyMode
-                                  ? '已隐藏'
-                                  : group,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        runAction(context, () async {
-                          _ensureVisible(dependencies);
-                          setState(
-                            () => _category = value == 'all'
-                                ? null
-                                : value.substring(9),
-                          );
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ],
+                onPressed: _filter,
+                icon: const Icon(Icons.filter_list),
+                selectedIcon: const Icon(Icons.filter_list_alt),
+              ),
             ),
           ),
           Expanded(
@@ -196,9 +191,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     return Card.filled(
                       child: ListTile(
                         key: Key('favorite_${item.postId}'),
-                        leading: Icon(
-                          Icons.favorite,
-                          color: savedHeartColor(context),
+                        leading: IconButton(
+                          key: Key('favorite_remove_${item.postId}'),
+                          tooltip: '取消收藏',
+                          onPressed: () => _remove(item.postId),
+                          icon: Icon(
+                            Icons.favorite,
+                            color: savedHeartColor(context),
+                          ),
                         ),
                         title: Text(
                           item.title.isEmpty
@@ -219,6 +219,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         trailing: PopupMenuButton<String>(
                           key: Key('favorite_actions_${item.postId}'),
                           tooltip: '收藏操作',
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
+                          ),
+                          clipBehavior: Clip.antiAlias,
                           onSelected: (action) => runAction(context, () async {
                             _ensureVisible(dependencies);
                             if (action == 'rename' || action == 'category') {
@@ -238,7 +242,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 );
                               }
                             } else {
-                              await dependencies.favorites.remove(item.postId);
+                              await _remove(item.postId);
                             }
                           }),
                           itemBuilder: (_) => const [

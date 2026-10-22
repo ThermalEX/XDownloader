@@ -45,17 +45,21 @@ class _NamingState extends State<NamingSettingsScreen> {
                     setState(() => _original = value);
                   }
                 },
-                child: const Column(
+                child: Column(
                   children: [
                     RadioListTile<bool>(
                       value: true,
                       title: Text('原始标题'),
-                      subtitle: Text('使用解析到的视频标题'),
+                      subtitle: Text(FileNaming.preview('{title}')),
                     ),
                     RadioListTile<bool>(
                       value: false,
                       title: Text('自定义规则'),
-                      subtitle: Text('组合标题、作者、日期等信息'),
+                      subtitle: Text(
+                        FileNaming.validateTemplate(_text.text) == null
+                            ? FileNaming.preview(_text.text)
+                            : '请修正规则',
+                      ),
                     ),
                   ],
                 ),

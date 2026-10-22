@@ -85,7 +85,10 @@ void main() {
             .enabled,
         isFalse,
       );
-      expect(find.text('示例视频.mp4'), findsOneWidget);
+      expect(
+        find.widgetWithText(RadioListTile<bool>, '示例视频.mp4'),
+        findsOneWidget,
+      );
       await tester.scrollUntilVisible(
         find.text('保存'),
         250,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/bootstrap.dart';
+import '../../core/naming/file_naming.dart';
 import 'sources_screen.dart';
 import 'naming_settings_screen.dart';
 
@@ -28,9 +29,11 @@ class RuleSettingsScreen extends StatelessWidget {
                   leading: const Icon(Icons.drive_file_rename_outline),
                   title: const Text('重命名规则'),
                   subtitle: Text(
-                    dependencies.settings.value.useOriginalFileName
-                        ? '原始标题'
-                        : dependencies.settings.value.fileNameTemplate,
+                    FileNaming.preview(
+                      dependencies.settings.value.useOriginalFileName
+                          ? '{title}'
+                          : dependencies.settings.value.fileNameTemplate,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),

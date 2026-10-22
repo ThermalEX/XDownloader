@@ -131,10 +131,6 @@ class _SourcesScreenState extends State<SourcesScreen> {
                     onChanged: (value) =>
                         runAction(context, () => repository.setFallback(value)),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('先尝试选中的源；开启自动换源后，失败时尝试其他源。'),
-                  ),
                 ],
               ),
             ),
@@ -145,8 +141,6 @@ class _SourcesScreenState extends State<SourcesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('用示例视频检测解析能力；结果仅供参考，不会切换当前源。'),
-                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.tonalIcon(
@@ -165,20 +159,28 @@ class _SourcesScreenState extends State<SourcesScreen> {
               SettingsPanel(
                 child: ListTile(
                   title: Text(source.name),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        source.builtin ? '内置解析源' : source.endpoint,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (_health.checking(source.id))
-                        const Text('正在检测…')
-                      else if (_health.result(source.id) case final result?)
-                        Text(result),
-                    ],
-                  ),
+                  subtitle:
+                      source.builtin &&
+                          !_health.checking(source.id) &&
+                          _health.result(source.id) == null
+                      ? null
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (!source.builtin)
+                              Text(
+                                source.endpoint,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            if (_health.checking(source.id))
+                              const Text('正在检测…')
+                            else if (_health.result(source.id)
+                                case final result?)
+                              Text(result),
+                          ],
+                        ),
                   leading: Icon(
                     repository.currentId == source.id
                         ? Icons.radio_button_checked

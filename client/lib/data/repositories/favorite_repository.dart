@@ -6,25 +6,39 @@ import '../../core/parsing/post_link.dart';
 import '../storage/snapshot_store.dart';
 import '../storage/serial_queue.dart';
 
-enum FavoriteSort { newest, oldest, title }
+enum FavoriteSort { defaultOrder, newest, oldest, title }
+
+class FavoriteRemoval {
+  const FavoriteRemoval._(
+    this.item,
+    this.position,
+    this.previousId,
+    this.nextId,
+  );
+  final FavoriteLink item;
+  final int position;
+  final String? previousId, nextId;
+}
 
 class FavoriteRepository extends ChangeNotifier {
   FavoriteRepository(this.store);
   final SnapshotStore store;
   final _queue = SerialQueue();
   List<FavoriteLink> _items = [];
-  FavoriteSort _sort = FavoriteSort.newest;
+  FavoriteSort _sort = FavoriteSort.defaultOrder;
   FavoriteSort get sort => _sort;
   List<String> get categories =>
       (_items.map((f) => f.category).where((c) => c.isNotEmpty).toSet().toList()
         ..sort());
   List<FavoriteLink> get items {
+    if (_sort == FavoriteSort.defaultOrder) return List.unmodifiable(_items);
     final positions = {
       for (var i = 0; i < _items.length; i++) _items[i].postId: i,
     };
     final result = [..._items]
       ..sort((a, b) {
         final order = switch (_sort) {
+          FavoriteSort.defaultOrder => 0,
           FavoriteSort.newest => b.createdAt.compareTo(a.createdAt),
           FavoriteSort.oldest => a.createdAt.compareTo(b.createdAt),
           FavoriteSort.title => a.title.toLowerCase().compareTo(
@@ -51,7 +65,9 @@ class FavoriteRepository extends ChangeNotifier {
         throw const FormatException('Duplicate favorite');
       }
       _items = items;
-      _sort = FavoriteSort.values.byName(data['sort'] as String? ?? 'newest');
+      _sort = FavoriteSort.values.byName(
+        data['sort'] as String? ?? 'defaultOrder',
+      );
     } catch (_) {
       throw const AppFailure(FailureKind.storage, '收藏数据损坏，原文件已保留');
     }
@@ -117,9 +133,31 @@ class FavoriteRepository extends ChangeNotifier {
     ]);
     return true;
   });
-  Future<void> remove(String postId) => _queue.run(() async {
-    if (_items.any((f) => f.postId == postId)) {
-      await _save(_items.where((f) => f.postId != postId).toList());
-    }
+  Future<void> remove(String postId) async {
+    await removeForUndo(postId);
+  }
+
+  Future<FavoriteRemoval?> removeForUndo(String postId) => _queue.run(() async {
+    final index = _items.indexWhere((f) => f.postId == postId);
+    if (index < 0) return null;
+    final removed = FavoriteRemoval._(
+      _items[index],
+      index,
+      index > 0 ? _items[index - 1].postId : null,
+      index + 1 < _items.length ? _items[index + 1].postId : null,
+    );
+    await _save(_items.where((f) => f.postId != postId).toList());
+    return removed;
+  });
+  Future<void> restore(FavoriteRemoval removed) => _queue.run(() async {
+    if (_items.any((f) => f.postId == removed.item.postId)) return;
+    final previous = _items.indexWhere((f) => f.postId == removed.previousId);
+    final next = _items.indexWhere((f) => f.postId == removed.nextId);
+    final position = previous >= 0
+        ? previous + 1
+        : next >= 0
+        ? next
+        : removed.position.clamp(0, _items.length);
+    await _save([..._items]..insert(position, removed.item));
   });
 }

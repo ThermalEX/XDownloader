@@ -64,10 +64,7 @@ class SettingsPanel extends StatelessWidget {
     return Card.filled(
       margin: const EdgeInsets.only(bottom: 16),
       color: colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: colors.outlineVariant),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -83,7 +80,6 @@ class SettingsPanel extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1, color: colors.outlineVariant),
           ],
           child,
         ],
