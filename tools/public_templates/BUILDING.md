@@ -28,4 +28,4 @@ The update protocol uses `update.json` and `SHA256SUMS.txt` attached to each Git
 
 ## App icon
 
-The transparent source is `client/assets/branding/app_icon.png`. From `client/`, run `dart run flutter_launcher_icons` to regenerate the Android launcher and adaptive foreground densities using the pinned development tool. Keep alpha and the configured inset; this tool is not an application runtime dependency.
+The transparent source is `client/assets/branding/app_icon.png`. From `client/`, run `dart run flutter_launcher_icons` to regenerate the Android launcher and adaptive foreground densities using the pinned development tool. Keep artwork alpha, the white adaptive background and the configured inset; this tool is not an application runtime dependency.

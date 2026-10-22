@@ -5,6 +5,8 @@ import '../../app/app_shell.dart';
 import '../../app/bootstrap.dart';
 import '../../app/favorite_icon.dart';
 import '../../core/models/app_failure.dart';
+import '../../core/models/favorite_link.dart';
+import '../../data/repositories/favorite_repository.dart';
 import '../../core/parsing/post_link.dart';
 
 void _ensureVisible(AppDependencies dependencies) {
@@ -41,7 +43,7 @@ Future<void> _add(
   }
 });
 
-class FavoritesScreen extends StatelessWidget {
+class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({
     super.key,
     required this.dependencies,
@@ -51,8 +53,18 @@ class FavoritesScreen extends StatelessWidget {
   final ValueChanged<String> onOpen;
 
   @override
+  State<FavoritesScreen> createState() => _FavoritesScreenState();
+}
+
+class _FavoritesScreenState extends State<FavoritesScreen> {
+  AppDependencies get dependencies => widget.dependencies;
+  String? _category;
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: dependencies.settings,
+    listenable: Listenable.merge([
+      dependencies.settings,
+      dependencies.favorites,
+    ]),
     builder: (context, _) {
       if (dependencies.settings.value.privacyMode) {
         return const Center(
@@ -71,13 +83,98 @@ class FavoritesScreen extends StatelessWidget {
           ),
         );
       }
+      final groups = dependencies.favorites.categories;
+      final selected =
+          _category == null || _category!.isEmpty || groups.contains(_category)
+          ? _category
+          : null;
       return Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<FavoriteSort>(
+                    key: const Key('favorite_sort'),
+                    isExpanded: true,
+                    value: dependencies.favorites.sort,
+                    underline: const SizedBox.shrink(),
+                    items: const [
+                      DropdownMenuItem(
+                        value: FavoriteSort.newest,
+                        child: Text('最新收藏'),
+                      ),
+                      DropdownMenuItem(
+                        value: FavoriteSort.oldest,
+                        child: Text('最早收藏'),
+                      ),
+                      DropdownMenuItem(
+                        value: FavoriteSort.title,
+                        child: Text('名称顺序'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        runAction(context, () async {
+                          _ensureVisible(dependencies);
+                          await dependencies.favorites.setSort(value);
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButton<String>(
+                    key: const Key('favorite_category_filter'),
+                    isExpanded: true,
+                    value: selected == null ? 'all' : 'category:$selected',
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      const DropdownMenuItem(value: 'all', child: Text('全部分类')),
+                      const DropdownMenuItem(
+                        value: 'category:',
+                        child: Text('未分类'),
+                      ),
+                      for (final group in groups)
+                        DropdownMenuItem(
+                          value: 'category:$group',
+                          child: ListenableBuilder(
+                            listenable: dependencies.settings,
+                            builder: (context, _) => Text(
+                              dependencies.settings.value.privacyMode
+                                  ? '已隐藏'
+                                  : group,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        runAction(context, () async {
+                          _ensureVisible(dependencies);
+                          setState(
+                            () => _category = value == 'all'
+                                ? null
+                                : value.substring(9),
+                          );
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: ListenableBuilder(
               listenable: dependencies.favorites,
               builder: (context, _) {
-                final items = dependencies.favorites.items;
+                final items = dependencies.favorites.items
+                    .where((f) => selected == null || f.category == selected)
+                    .toList();
                 if (items.isEmpty) {
                   return ListView(
                     padding: const EdgeInsets.all(32),
@@ -111,20 +208,27 @@ class FavoritesScreen extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          item.url.toString(),
+                          '${item.category.isEmpty ? '' : '${item.category} · '}${item.url}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         onTap: () => runAction(context, () async {
                           _ensureVisible(dependencies);
-                          onOpen(item.url.toString());
+                          widget.onOpen(item.url.toString());
                         }),
-                        trailing: PopupMenuButton<bool>(
+                        trailing: PopupMenuButton<String>(
                           key: Key('favorite_actions_${item.postId}'),
                           tooltip: '收藏操作',
-                          onSelected: (copy) => runAction(context, () async {
+                          onSelected: (action) => runAction(context, () async {
                             _ensureVisible(dependencies);
-                            if (copy) {
+                            if (action == 'rename' || action == 'category') {
+                              await _editFavorite(
+                                context,
+                                dependencies,
+                                item,
+                                category: action == 'category',
+                              );
+                            } else if (action == 'copy') {
                               await Clipboard.setData(
                                 ClipboardData(text: item.url.toString()),
                               );
@@ -138,8 +242,10 @@ class FavoritesScreen extends StatelessWidget {
                             }
                           }),
                           itemBuilder: (_) => const [
-                            PopupMenuItem(value: true, child: Text('复制链接')),
-                            PopupMenuItem(value: false, child: Text('取消收藏')),
+                            PopupMenuItem(value: 'rename', child: Text('重命名')),
+                            PopupMenuItem(value: 'category', child: Text('分类')),
+                            PopupMenuItem(value: 'copy', child: Text('复制链接')),
+                            PopupMenuItem(value: 'remove', child: Text('取消收藏')),
                           ],
                         ),
                       ),
@@ -149,6 +255,130 @@ class FavoritesScreen extends StatelessWidget {
               },
             ),
           ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _editFavorite(
+  BuildContext context,
+  AppDependencies dependencies,
+  FavoriteLink item, {
+  required bool category,
+}) async {
+  _ensureVisible(dependencies);
+  final result = await showDialog<(String, String)>(
+    context: context,
+    builder: (_) => _FavoriteEditDialog(
+      dependencies: dependencies,
+      item: item,
+      categoryFirst: category,
+    ),
+  );
+  if (result == null || !context.mounted) return;
+  _ensureVisible(dependencies);
+  await dependencies.favorites.update(
+    item.postId,
+    title: result.$1,
+    category: result.$2,
+  );
+}
+
+class _FavoriteEditDialog extends StatefulWidget {
+  const _FavoriteEditDialog({
+    required this.dependencies,
+    required this.item,
+    required this.categoryFirst,
+  });
+  final AppDependencies dependencies;
+  final FavoriteLink item;
+  final bool categoryFirst;
+  @override
+  State<_FavoriteEditDialog> createState() => _FavoriteEditState();
+}
+
+class _FavoriteEditState extends State<_FavoriteEditDialog> {
+  late final _title = TextEditingController(
+    text: widget.item.title.isEmpty
+        ? 'X 帖子 ${widget.item.postId}'
+        : widget.item.title,
+  );
+  late final _category = TextEditingController(text: widget.item.category);
+  final _form = GlobalKey<FormState>();
+  @override
+  void dispose() {
+    _title.dispose();
+    _category.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.dependencies.settings,
+    builder: (context, _) {
+      final hidden = widget.dependencies.settings.value.privacyMode;
+      return AlertDialog(
+        title: Text(hidden ? '隐私模式已启动，无法查看收藏' : '编辑收藏'),
+        scrollable: true,
+        content: hidden
+            ? null
+            : Form(
+                key: _form,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      key: const Key('favorite_title'),
+                      controller: _title,
+                      maxLength: 300,
+                      autofocus: !widget.categoryFirst,
+                      decoration: const InputDecoration(labelText: '名称'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? '请输入名称'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('favorite_category'),
+                      controller: _category,
+                      maxLength: 40,
+                      autofocus: widget.categoryFirst,
+                      decoration: const InputDecoration(
+                        labelText: '分类',
+                        helperText: '留空表示未分类，可输入新分类',
+                      ),
+                    ),
+                    if (widget.dependencies.favorites.categories.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final group
+                              in widget.dependencies.favorites.categories)
+                            ActionChip(
+                              label: Text(group),
+                              onPressed: () => _category.text = group,
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          if (!hidden)
+            FilledButton(
+              onPressed: () {
+                if (_form.currentState!.validate()) {
+                  Navigator.pop(context, (_title.text, _category.text));
+                }
+              },
+              child: const Text('保存'),
+            ),
         ],
       );
     },

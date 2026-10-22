@@ -17,6 +17,98 @@ class FailingFavoriteStore extends MemorySnapshotStore {
 }
 
 void main() {
+  test(
+    'durable favorite sort and category recover after invalid sort snapshot',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('xdl-favorite-sort-');
+      try {
+        final store = SnapshotStore(dir);
+        final repo = FavoriteRepository(store);
+        await repo.initialize();
+        await repo.add('https://x.com/a/status/123456', title: '名称');
+        await repo.update('123456', title: '名称', category: '音乐');
+        await repo.setSort(FavoriteSort.title);
+        final restored = FavoriteRepository(store);
+        await restored.initialize();
+        expect(restored.sort, FavoriteSort.title);
+        expect(restored.items.single.category, '音乐');
+        await File('${dir.path}/favorites.json')
+            .writeAsString('{"version":1,"data":{"sort":"broken","items":[]}}');
+        final recovered = FavoriteRepository(store);
+        await recovered.initialize();
+        expect(recovered.items.single.category, '音乐');
+        repo.dispose();
+        restored.dispose();
+        recovered.dispose();
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
+    'old favorites migrate and edits sorting categories survive reload',
+    () async {
+      final store = MemorySnapshotStore();
+      await store.write('favorites', {
+        'items': [
+          {
+            'postId': '123456',
+            'url': 'https://x.com/a/status/123456',
+            'title': 'Zulu',
+            'createdAt': '2026-10-01T00:00:00Z',
+          },
+          {
+            'postId': '234567',
+            'url': 'https://x.com/b/status/234567',
+            'title': 'Alpha',
+            'createdAt': '2026-10-02T00:00:00Z',
+          },
+        ],
+      });
+      final repo = FavoriteRepository(store);
+      await repo.initialize();
+      expect(repo.items.every((f) => f.category.isEmpty), isTrue);
+      await repo.update('123456', title: 'Beta', category: ' 音乐 ');
+      await repo.setSort(FavoriteSort.title);
+      expect(repo.items.map((f) => f.title), ['Alpha', 'Beta']);
+      await Future.wait([
+        repo.setSort(FavoriteSort.oldest),
+        repo.update('234567', title: '新名称', category: '电影'),
+      ]);
+      final restored = FavoriteRepository(store);
+      await restored.initialize();
+      expect(restored.sort, FavoriteSort.oldest);
+      expect(restored.items.map((f) => f.postId), ['123456', '234567']);
+      expect(restored.categories, ['电影', '音乐']);
+      expect(restored.items.first.category, '音乐');
+      await restored.add('https://x.com/a/status/123456', title: '自动解析标题');
+      expect(restored.items.first.title, 'Beta');
+      repo.dispose();
+      restored.dispose();
+    },
+  );
+  test(
+    'failed favorite edits leave title category and sorting intact',
+    () async {
+      final store = FailingFavoriteStore();
+      final repo = FavoriteRepository(store);
+      await repo.initialize();
+      await repo.add('https://x.com/a/status/123456', title: '原名');
+      store.fail = true;
+      await expectLater(
+        repo.update('123456', title: '新名', category: '分类'),
+        throwsA(isA<AppFailure>()),
+      );
+      await expectLater(
+        repo.setSort(FavoriteSort.title),
+        throwsA(isA<AppFailure>()),
+      );
+      expect(repo.sort, FavoriteSort.newest);
+      expect(repo.items.single.title, '原名');
+      expect(repo.categories, isEmpty);
+      repo.dispose();
+    },
+  );
   test('favorites canonicalize share text and deduplicate Twitter and X by post id', () async {
     final store = MemorySnapshotStore();
     final repo = FavoriteRepository(store);

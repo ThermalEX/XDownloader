@@ -157,13 +157,6 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
         ),
       ),
-      floatingActionButton:
-          index == 0 &&
-              MediaQuery.sizeOf(context).height -
-                      MediaQuery.viewInsetsOf(context).bottom >=
-                  240
-          ? HomeFavoriteAction(home: home)
-          : null,
       bottomNavigationBar: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -184,47 +177,50 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                 ),
               ),
               if (MediaQuery.viewInsetsOf(context).bottom == 0)
-                NavigationBar(
-                  selectedIndex: index,
-                  onDestinationSelected: (value) {
-                    if (MediaQuery.disableAnimationsOf(context)) {
+                Theme(
+                  data: Theme.of(context)
+                      .copyWith(splashFactory: NoSplash.splashFactory),
+                  child: NavigationBar(
+                    animationDuration: const Duration(milliseconds: 250),
+                    overlayColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.pressed)
+                          ? Colors.transparent
+                          : null,
+                    ),
+                    selectedIndex: index,
+                    onDestinationSelected: (value) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() => index = value);
+                      home.setVisible(value == 0);
                       _pages.jumpToPage(value);
-                    } else {
-                      unawaited(
-                        _pages.animateToPage(
-                          value,
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOutCubic,
-                        ),
-                      );
-                    }
-                  },
-                  destinations: [
-                    const NavigationDestination(
-                      key: Key('nav_home'),
-                      icon: Icon(Icons.link),
-                      label: '解析',
-                    ),
-                    const NavigationDestination(
-                      key: Key('nav_downloads'),
-                      icon: Icon(Icons.download_outlined),
-                      label: '下载',
-                    ),
-                    NavigationDestination(
-                      key: const Key('nav_favorites'),
-                      icon: const Icon(Icons.favorite_border),
-                      selectedIcon: Icon(
-                        Icons.favorite,
-                        color: savedHeartColor(context),
+                    },
+                    destinations: [
+                      const NavigationDestination(
+                        key: Key('nav_home'),
+                        icon: Icon(Icons.link),
+                        label: '解析',
                       ),
-                      label: '收藏',
-                    ),
-                    const NavigationDestination(
-                      key: Key('nav_settings'),
-                      icon: Icon(Icons.settings_outlined),
-                      label: '设置',
-                    ),
-                  ],
+                      const NavigationDestination(
+                        key: Key('nav_downloads'),
+                        icon: Icon(Icons.download_outlined),
+                        label: '下载',
+                      ),
+                      NavigationDestination(
+                        key: const Key('nav_favorites'),
+                        icon: const Icon(Icons.favorite_border),
+                        selectedIcon: Icon(
+                          Icons.favorite,
+                          color: savedHeartColor(context),
+                        ),
+                        label: '收藏',
+                      ),
+                      const NavigationDestination(
+                        key: Key('nav_settings'),
+                        icon: Icon(Icons.settings_outlined),
+                        label: '设置',
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),

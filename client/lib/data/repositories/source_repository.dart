@@ -106,9 +106,30 @@ class SourceRepository extends ChangeNotifier {
   Future<void> setFallback(bool enabled) =>
       _queue.run(() => _save(_custom, _currentId, enabled));
 
-  String exportSources() => SourceExchange.encode(list);
-  Future<int> importSources(String text) => _queue.run(() async {
-    final imported = SourceExchange.decode(text);
+  String exportSources({Set<String>? ids}) {
+    if (ids != null &&
+        (ids.isEmpty || ids.any((id) => !list.any((s) => s.id == id)))) {
+      throw const AppFailure(FailureKind.malformed, '请选择存在的解析源');
+    }
+    return SourceExchange.encode(
+      list.where((s) => ids == null || ids.contains(s.id)).toList(),
+    );
+  }
+
+  Future<int> importSources(
+    String text, {
+    Set<int>? selectedIndices,
+  }) => _queue.run(() async {
+    final decoded = SourceExchange.decode(text);
+    if (selectedIndices != null &&
+        (selectedIndices.isEmpty ||
+            selectedIndices.any((i) => i < 0 || i >= decoded.length))) {
+      throw const AppFailure(FailureKind.malformed, '请选择要导入的解析源');
+    }
+    final imported = [
+      for (var i = 0; i < decoded.length; i++)
+        if (selectedIndices == null || selectedIndices.contains(i)) decoded[i],
+    ];
     final identities = list.map(SourceExchange.identity).toSet();
     final next = [..._custom];
     var added = 0;

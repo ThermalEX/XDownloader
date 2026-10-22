@@ -7,6 +7,68 @@ import '../support/app_fixture.dart';
 
 void main() {
   testWidgets(
+    'privacy hides category names in already open filter',
+    (tester) => withAppFixture(tester, (fixture) async {
+      await fixture.favorites.add('https://x.com/a/status/123456', title: '名称');
+      await fixture.favorites.update('123456', title: '名称', category: '秘密分类');
+      await tester.pumpWidget(
+        XDownloaderApp(dependencies: fixture.dependencies),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('nav_favorites')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('favorite_sort')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('最早收藏').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('favorite_category_filter')));
+      await tester.pumpAndSettle();
+      await fixture.settings.edit((s) => s.copyWith(privacyMode: true));
+      await tester.pumpAndSettle();
+      expect(find.text('秘密分类'), findsNothing);
+    }),
+  );
+  testWidgets(
+    'favorites edit names categories and sort while privacy hides editor',
+    (tester) => withAppFixture(tester, (fixture) async {
+      await fixture.favorites.add('https://x.com/a/status/123456', title: '原名');
+      await fixture.favorites.add(
+        'https://x.com/b/status/234567',
+        title: '另一个',
+      );
+      await tester.pumpWidget(
+        XDownloaderApp(dependencies: fixture.dependencies),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('nav_favorites')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('favorite_actions_123456')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('重命名'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('favorite_title')), '新的名称');
+      await tester.enterText(find.byKey(const Key('favorite_category')), '音乐');
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+      expect(find.text('新的名称'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('favorite_category_filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('音乐').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('favorite_234567')), findsNothing);
+      expect(find.byKey(const Key('favorite_123456')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('favorite_actions_123456')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('分类'));
+      await tester.pumpAndSettle();
+      await fixture.settings.edit((s) => s.copyWith(privacyMode: true));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('favorite_title')), findsNothing);
+      expect(find.text('音乐'), findsNothing);
+      expect(find.text('保存'), findsNothing);
+    }),
+  );
+  testWidgets(
     'privacy hides favorites and blocks stale opening until disabled',
     (tester) => withAppFixture(tester, (fixture) async {
       await fixture.favorites.add(

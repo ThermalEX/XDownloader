@@ -137,6 +137,7 @@ client/test/features/settings_test.dart
 client/test/features/source_exchange_ui_test.dart
 client/test/features/source_health_test.dart
 client/test/features/startup_theme_test.dart
+client/test/features/ui_polish_test.dart
 client/test/features/video_preview_test.dart
 client/test/fixtures/fx_two.json
 client/test/fixtures/scrape_one.html

@@ -6,12 +6,37 @@ import '../../core/parsing/post_link.dart';
 import '../storage/snapshot_store.dart';
 import '../storage/serial_queue.dart';
 
+enum FavoriteSort { newest, oldest, title }
+
 class FavoriteRepository extends ChangeNotifier {
   FavoriteRepository(this.store);
   final SnapshotStore store;
   final _queue = SerialQueue();
   List<FavoriteLink> _items = [];
-  List<FavoriteLink> get items => List.unmodifiable(_items);
+  FavoriteSort _sort = FavoriteSort.newest;
+  FavoriteSort get sort => _sort;
+  List<String> get categories =>
+      (_items.map((f) => f.category).where((c) => c.isNotEmpty).toSet().toList()
+        ..sort());
+  List<FavoriteLink> get items {
+    final positions = {
+      for (var i = 0; i < _items.length; i++) _items[i].postId: i,
+    };
+    final result = [..._items]
+      ..sort((a, b) {
+        final order = switch (_sort) {
+          FavoriteSort.newest => b.createdAt.compareTo(a.createdAt),
+          FavoriteSort.oldest => a.createdAt.compareTo(b.createdAt),
+          FavoriteSort.title => a.title.toLowerCase().compareTo(
+            b.title.toLowerCase(),
+          ),
+        };
+        return order != 0
+            ? order
+            : positions[a.postId]!.compareTo(positions[b.postId]!);
+      });
+    return List.unmodifiable(result);
+  }
 
   Future<void> initialize() async {
     final data = await store.read('favorites');
@@ -26,18 +51,43 @@ class FavoriteRepository extends ChangeNotifier {
         throw const FormatException('Duplicate favorite');
       }
       _items = items;
+      _sort = FavoriteSort.values.byName(data['sort'] as String? ?? 'newest');
     } catch (_) {
       throw const AppFailure(FailureKind.storage, '收藏数据损坏，原文件已保留');
     }
   }
 
-  Future<void> _save(List<FavoriteLink> next) async {
+  Future<void> _save(List<FavoriteLink> next, {FavoriteSort? sort}) async {
     await store.write('favorites', {
       'items': next.map((f) => f.toJson()).toList(),
+      'sort': (sort ?? _sort).name,
     });
     _items = next;
+    _sort = sort ?? _sort;
     notifyListeners();
   }
+
+  Future<void> setSort(FavoriteSort value) =>
+      _queue.run(() => _save(_items, sort: value));
+  Future<void> update(
+    String postId, {
+    required String title,
+    required String category,
+  }) => _queue.run(() async {
+    final name = title.trim(), group = category.trim();
+    if (name.isEmpty || name.runes.length > 300 || group.runes.length > 40) {
+      throw const AppFailure(FailureKind.malformed, '名称需为 1–300 字，分类最多 40 字');
+    }
+    await _save(
+      _items
+          .map(
+            (f) => f.postId == postId
+                ? f.copyWith(title: name, category: group)
+                : f,
+          )
+          .toList(),
+    );
+  });
 
   Future<bool> add(String input, {String? title}) => _queue.run(() async {
     final post = PostLink.tryParse(input);
@@ -50,16 +100,7 @@ class FavoriteRepository extends ChangeNotifier {
       if (existing.title.isEmpty && text.isNotEmpty) {
         await _save(
           _items
-              .map(
-                (f) => f.postId == post.postId
-                    ? FavoriteLink(
-                        postId: f.postId,
-                        url: f.url,
-                        title: text,
-                        createdAt: f.createdAt,
-                      )
-                    : f,
-              )
+              .map((f) => f.postId == post.postId ? f.copyWith(title: text) : f)
               .toList(),
         );
       }

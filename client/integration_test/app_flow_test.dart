@@ -159,7 +159,10 @@ void main() {
       expect(cover!.length, greaterThan(100));
       expect(cover.take(2), [0xff, 0xd8]);
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(PageView), const Offset(-600, 0));
+      await tester.drag(
+        find.byType(PageView),
+        Offset(-tester.getSize(find.byType(PageView)).width * .8, 0),
+      );
       await tester.pumpAndSettle();
       expect(
         tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
@@ -199,9 +202,15 @@ void main() {
       expect(find.byKey(const Key('theme_mode')), findsOneWidget);
       tester.state<NavigatorState>(find.byType(Navigator).first).pop();
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(PageView), const Offset(600, 0));
+      await tester.drag(
+        find.byType(PageView),
+        Offset(tester.getSize(find.byType(PageView)).width * .8, 0),
+      );
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(PageView), const Offset(600, 0));
+      await tester.drag(
+        find.byType(PageView),
+        Offset(tester.getSize(find.byType(PageView)).width * .8, 0),
+      );
       await tester.pumpAndSettle();
       expect(
         tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
@@ -352,9 +361,15 @@ void main() {
       await tester.longPress(find.byKey(Key('download_$id')));
       await tester.pumpAndSettle();
       expect(find.text('已选 1 项'), findsOneWidget);
-      await tester.drag(find.byType(PageView), const Offset(-600, 0));
+      await tester.drag(
+        find.byType(PageView),
+        Offset(-tester.getSize(find.byType(PageView)).width * .8, 0),
+      );
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(PageView), const Offset(600, 0));
+      await tester.drag(
+        find.byType(PageView),
+        Offset(tester.getSize(find.byType(PageView)).width * .8, 0),
+      );
       await tester.pumpAndSettle();
       expect(find.text('已选 1 项'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());

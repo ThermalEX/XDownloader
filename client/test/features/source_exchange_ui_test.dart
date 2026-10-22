@@ -54,12 +54,27 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('从剪贴板导入'));
       await tester.pumpAndSettle();
+      expect(fixture.sources.list.where((s) => !s.builtin), isEmpty);
+      expect(find.text('选择要导入的源'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('source_pick_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('导入所选 (1)'));
+      await tester.pumpAndSettle();
       expect(fixture.sources.list.last.name, '共享测试源');
       await tester.tap(find.byTooltip('源导入与导出'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('导出到剪贴板'));
       await tester.pumpAndSettle();
-      expect(jsonDecode(copied!)['sources'].last['name'], '共享测试源');
+      expect(copied, isNull);
+      await tester.tap(find.byKey(const Key('source_pick_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('复制所选 (1)'));
+      await tester.pumpAndSettle();
+      expect(jsonDecode(copied!)['sources'], hasLength(1));
+      expect(
+        jsonDecode(copied!)['sources'].single['name'],
+        fixture.sources.list.first.name,
+      );
     }),
   );
   testWidgets(

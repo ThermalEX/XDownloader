@@ -30,6 +30,7 @@ class SettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
         SettingsGroup(
+          grouped: true,
           title: '资源',
           children: [
             entry(
@@ -47,6 +48,7 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
         SettingsGroup(
+          grouped: true,
           title: '应用',
           children: [
             entry(
@@ -64,6 +66,7 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
         SettingsGroup(
+          grouped: true,
           title: '其他',
           children: [
             KeyedSubtree(

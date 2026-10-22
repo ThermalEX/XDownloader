@@ -34,6 +34,10 @@ class SnapshotSchema {
             return false;
           }
         case 'favorites':
+          if (data['sort'] != null &&
+              !const ['newest', 'oldest', 'title'].contains(data['sort'])) {
+            return false;
+          }
           final ids = <String>{};
           for (final raw in data['items'] as List? ?? []) {
             final favorite = FavoriteLink.fromJson(

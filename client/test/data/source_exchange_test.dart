@@ -17,6 +17,48 @@ class FailingSourceStore extends MemorySnapshotStore {
 }
 
 void main() {
+  test('source exchange accepts explicit subsets and rejects invalid selection atomically', () async {
+    final repo = SourceRepository(MemorySnapshotStore());
+    await repo.initialize();
+    final first = repo.list.first;
+    expect(
+      (jsonDecode(repo.exportSources(ids: {first.id}))['sources'] as List),
+      hasLength(1),
+    );
+    expect(() => repo.exportSources(ids: {}), throwsA(isA<AppFailure>()));
+    final text = jsonEncode({
+      'format': 'xdownloader.sources',
+      'version': 1,
+      'sources': [
+        {
+          'id': 'one',
+          'name': 'One',
+          'endpoint': 'https://one.test/?url={urlenc}',
+          'kind': 'scrape',
+          'method': 'GET',
+          'body': '',
+          'builtin': false,
+        },
+        {
+          'id': 'two',
+          'name': 'Two',
+          'endpoint': 'https://two.test/?url={urlenc}',
+          'kind': 'scrape',
+          'method': 'GET',
+          'body': '',
+          'builtin': false,
+        },
+      ],
+    });
+    await expectLater(
+      repo.importSources(text, selectedIndices: {9}),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(repo.list.where((s) => !s.builtin), isEmpty);
+    expect(await repo.importSources(text, selectedIndices: {1}), 1);
+    expect(repo.list.last.name, 'Two');
+    repo.dispose();
+  });
   const custom = ParseSource(
     'custom',
     'Example',

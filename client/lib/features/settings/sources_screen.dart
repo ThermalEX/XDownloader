@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/models/app_failure.dart';
+import '../../core/models/source.dart';
+import '../../core/parsing/source_exchange.dart';
 
 import '../../app/app_shell.dart';
 import '../../data/repositories/source_repository.dart';
@@ -43,11 +45,32 @@ class _SourcesScreenState extends State<SourcesScreen> {
         if (text == null || text.trim().isEmpty) {
           throw const AppFailure(FailureKind.malformed, '剪贴板中没有源配置');
         }
-        final added = await repository.importSources(text);
+        final imported = SourceExchange.decode(text);
+        final selection = await showDialog<Set<int>>(
+          context: context,
+          builder: (_) =>
+              _SourceSelectionDialog(sources: imported, importing: true),
+        );
+        if (selection == null || !mounted) return;
+        final added = await repository.importSources(
+          text,
+          selectedIndices: selection,
+        );
         message = added == 0 ? '没有新增解析源，已有配置保持不变' : '已导入 $added 个解析源';
       } else {
+        final sources = repository.list;
+        final selection = await showDialog<Set<int>>(
+          context: context,
+          builder: (_) =>
+              _SourceSelectionDialog(sources: sources, importing: false),
+        );
+        if (selection == null || !mounted) return;
         await Clipboard.setData(
-          ClipboardData(text: repository.exportSources()),
+          ClipboardData(
+            text: repository.exportSources(
+              ids: selection.map((i) => sources[i].id).toSet(),
+            ),
+          ),
         );
         message = '已将解析源配置复制到剪贴板';
       }
@@ -122,15 +145,18 @@ class _SourcesScreenState extends State<SourcesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FilledButton.tonalIcon(
-                      onPressed: _health.checkingAll
-                          ? null
-                          : () => _health.checkAll(repository.list.toList()),
-                      icon: const Icon(Icons.network_check),
-                      label: Text(_health.checkingAll ? '正在检测全部…' : '检测全部'),
-                    ),
-                    const SizedBox(height: 8),
                     const Text('用示例视频检测解析能力；结果仅供参考，不会切换当前源。'),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.tonalIcon(
+                        onPressed: _health.checkingAll
+                            ? null
+                            : () => _health.checkAll(repository.list.toList()),
+                        icon: const Icon(Icons.network_check),
+                        label: Text(_health.checkingAll ? '正在检测全部…' : '检测全部'),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -177,20 +203,46 @@ class _SourcesScreenState extends State<SourcesScreen> {
                               )
                             : const Icon(Icons.network_check),
                       ),
-                      if (!source.builtin)
-                        IconButton(
-                          tooltip: '编辑解析源',
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => SourceEditorScreen(
-                                repository: repository,
-                                source: source,
+                      PopupMenuButton<String>(
+                        tooltip: '${source.name} 操作',
+                        onSelected: (action) => runAction(context, () async {
+                          if (action == 'export') {
+                            await Clipboard.setData(
+                              ClipboardData(
+                                text: repository.exportSources(
+                                  ids: {source.id},
+                                ),
                               ),
-                            ),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('已复制此源配置')),
+                              );
+                            }
+                          } else {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => SourceEditorScreen(
+                                  repository: repository,
+                                  source: source,
+                                ),
+                              ),
+                            );
+                          }
+                        }),
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'export',
+                            child: Text('导出此源'),
                           ),
-                        ),
+                          if (!source.builtin)
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Text('编辑解析源'),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -199,5 +251,95 @@ class _SourcesScreenState extends State<SourcesScreen> {
         ),
       ),
     ),
+  );
+}
+
+class _SourceSelectionDialog extends StatefulWidget {
+  const _SourceSelectionDialog({
+    required this.sources,
+    required this.importing,
+  });
+  final List<ParseSource> sources;
+  final bool importing;
+  @override
+  State<_SourceSelectionDialog> createState() => _SourceSelectionState();
+}
+
+class _SourceSelectionState extends State<_SourceSelectionDialog> {
+  final _selected = <int>{};
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.importing ? '选择要导入的源' : '选择要导出的源'),
+    content: SizedBox(
+      width: 420,
+      height: MediaQuery.sizeOf(context).height * .45,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '已选择 ${_selected.length} / ${widget.sources.length}',
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() {
+                  if (_selected.length == widget.sources.length) {
+                    _selected.clear();
+                  } else {
+                    _selected.addAll(
+                      List.generate(widget.sources.length, (i) => i),
+                    );
+                  }
+                }),
+                child: Text(
+                  _selected.length == widget.sources.length ? '取消全选' : '全选',
+                ),
+              ),
+            ],
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.sources.length,
+              itemBuilder: (context, index) {
+                final source = widget.sources[index];
+                return CheckboxListTile(
+                  key: Key('source_pick_$index'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(source.name),
+                  subtitle: Text(
+                    source.endpoint,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  value: _selected.contains(index),
+                  onChanged: (value) => setState(() {
+                    if (value == true) {
+                      _selected.add(index);
+                    } else {
+                      _selected.remove(index);
+                    }
+                  }),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: _selected.isEmpty
+            ? null
+            : () => Navigator.pop(context, Set<int>.of(_selected)),
+        child: Text(
+          '${widget.importing ? '导入所选' : '复制所选'} (${_selected.length})',
+        ),
+      ),
+    ],
   );
 }
