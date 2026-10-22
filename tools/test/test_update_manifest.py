@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import tempfile
 import unittest
+import sys
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('update_manifest', Path(__file__).parents[1] / 'make_update_manifest.py')
@@ -10,6 +11,32 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class UpdateManifestTest(unittest.TestCase):
+    def test_changelog_publishes_body_without_duplicate_release_heading(self):
+        source = '# XDownloader 2.11.0\n\n## 重要修复\n\n- **内容**\n\n## XDownloader 2.10.0\n\n- 旧内容\n'
+        self.assertEqual(module.notes_from_changelog(source, '2.11.0'), '## 重要修复\n\n- **内容**\n')
+        self.assertEqual(module.notes_from_changelog('# XDownloader 2.11.0\n\n- 内容\n', '2.11.0'), '- 内容\n')
+        with self.assertRaises(module.ManifestError): module.notes_from_changelog(source, '2.10.0')
+        with self.assertRaises(module.ManifestError): module.notes_from_changelog('# XDownloader 2.11.0\n', '2.11.0')
+    def test_cli_changelog_validation_happens_before_metadata_output(self):
+        for correct in [True, False]:
+            changelog=self.root / 'CHANGELOG.md'
+            changelog.write_text('# XDownloader ' + ('2.5.0' if correct else '2.4.0') + '\n\n- Change\n', encoding='utf-8')
+            output=self.root / ('valid' if correct else 'invalid')
+            args=['make_update_manifest.py', '--channel', 'stable', '--tag', 'v2.5.0',
+                  '--aapt2', 'fixture', '--apksigner', 'fixture', '--output', str(output), '--changelog', str(changelog)]
+            for path in self.paths: args += ['--apk', str(path)]
+            with patch.object(sys, 'argv', args), patch.object(module, 'inspect_apk', side_effect=lambda path, *_args: self.inspect(path)):
+                if correct:
+                    module.main()
+                    self.assertEqual((output/'RELEASE_NOTES.md').read_text(encoding='utf-8'), '- Change\n')
+                else:
+                    with self.assertRaises(SystemExit): module.main()
+                    self.assertFalse(output.exists())
+    def test_version_heading_inside_fenced_examples_does_not_truncate_notes(self):
+        for opening, closing in [('```markdown', '```'), ('~~~~', '~~~~~')]:
+            body=f'- Current\n\n{opening}\n## XDownloader 2.10.0\n{closing}\n\n- After example\n'
+            source='# XDownloader 2.11.0\n\n' + body + '\n## XDownloader 2.10.0\n\n- Older\n'
+            self.assertEqual(module.notes_from_changelog(source, '2.11.0'), body)
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='xdl-manifest-')
         self.addCleanup(self.temp.cleanup)

@@ -264,6 +264,7 @@ class GitHubReleaseClient {
       tag: tag,
       releasePage: page,
       notes: r['body'] as String? ?? '',
+      title: r['name'] is String ? (r['name'] as String).trim() : '',
       versionName: version,
       versionCode: code,
       channel: channel,

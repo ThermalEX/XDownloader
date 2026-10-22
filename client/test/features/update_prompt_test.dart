@@ -32,6 +32,59 @@ Future<void> checkManually(WidgetTester tester) async {
 
 void main() {
   testWidgets(
+    'startup result waits for foreground and prompts exactly once on return',
+    (tester) => withAppFixture(tester, (f) async {
+      final pending = Completer<ReleaseCheck>();
+      f.releaseClient.respond = (_) => pending.future;
+      await f.updates.setAutoCheck(true);
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      pending.complete(availableUpdate());
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text('关闭'));
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.releaseClient.checks, 1);
+      expect(f.updateBackend.calls, isEmpty);
+    }),
+  );
+  testWidgets(
+    'startup prompt waits for a subpage to close',
+    (tester) => withAppFixture(tester, (f) async {
+      final pending = Completer<ReleaseCheck>();
+      f.releaseClient.respond = (_) => pending.future;
+      await f.updates.setAutoCheck(true);
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('子页面')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      pending.complete(availableUpdate());
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(f.releaseClient.checks, 1);
+    }),
+  );
+  testWidgets(
     'startup offers download in dialog and never installs automatically',
     (tester) => withAppFixture(tester, (f) async {
       await f.updates.setAutoCheck(true);
@@ -39,7 +92,7 @@ void main() {
       await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
-      expect(find.text('发现新版本 2.5.0'), findsOneWidget);
+      expect(find.text('XDownloader 2.5.0'), findsOneWidget);
       expect(find.text('不再提醒'), findsOneWidget);
       expect(f.updateBackend.calls, isEmpty);
       await tester.tap(find.text('下载更新'));
@@ -51,6 +104,35 @@ void main() {
       await tester.pumpAndSettle();
     }),
   );
+  for (final invalidate in ['suppress', 'manual check']) {
+    testWidgets(
+      'deferred startup prompt respects $invalidate before returning',
+      (tester) => withAppFixture(tester, (f) async {
+        final pending = Completer<ReleaseCheck>();
+        f.releaseClient.respond = (_) => pending.future;
+        await f.updates.setAutoCheck(true);
+        await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+        await tester.pumpAndSettle();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        pending.complete(availableUpdate());
+        await tester.pumpAndSettle();
+        if (invalidate == 'suppress') {
+          await f.updates.setShowUpdatePrompt(false);
+        } else {
+          f.releaseClient.respond = (_) async => availableUpdate();
+          await f.updates.check();
+        }
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(f.updateBackend.calls, isEmpty);
+      }),
+    );
+  }
   testWidgets(
     'do not remind persists, keeps startup checks, and manual check overrides it',
     (tester) => withAppFixture(tester, (f) async {

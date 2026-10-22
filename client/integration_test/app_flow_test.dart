@@ -112,7 +112,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('视频 1'), findsOneWidget);
       expect(find.text('视频 2'), findsOneWidget);
-      await tester.ensureVisible(find.byKey(const Key('favorite_current')));
+      expect(
+        find.byKey(const Key('favorite_current')).hitTestable(),
+        findsOneWidget,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('favorite_current')));
       await tester.pumpAndSettle();

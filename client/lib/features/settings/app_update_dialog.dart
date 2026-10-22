@@ -84,9 +84,7 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
         titlePadding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
         constraints: const BoxConstraints(maxWidth: 560),
         scrollable: true,
-        title: Text(
-          candidate == null ? '应用更新' : '发现新版本 ${candidate.versionName}',
-        ),
+        title: Text(candidate?.displayTitle ?? '应用更新'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
@@ -98,9 +96,9 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
                 const Text('正在检查更新…'),
               ] else if (candidate != null) ...[
                 ReleaseNotes(
-                  data: candidate.notes.isEmpty
+                  data: candidate.displayNotes.trim().isEmpty
                       ? '此版本未提供更新说明'
-                      : candidate.notes,
+                      : candidate.displayNotes,
                   onOpenLink: (uri) => repo.openPage(uri),
                 ),
                 const SizedBox(height: 12),

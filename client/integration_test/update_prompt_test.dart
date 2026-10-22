@@ -20,7 +20,10 @@ void main() {
       // Isolated in-memory repositories and fake update backend: no installation
       // or download of an APK on the device during this interaction test.
       f.releaseClient.respond = (_) async => ReleaseCheck(
-        candidate: fixtureUpdate(),
+        candidate: fixtureUpdate(
+          title: 'XDownloader 更新标题',
+          notes: '# XDownloader 2.5.0\n\n## 重要修复\n\n新版说明',
+        ),
         scopeComplete: true,
         skippedReleases: 0,
         validReleases: 1,
@@ -30,6 +33,9 @@ void main() {
       await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('XDownloader 更新标题'), findsOneWidget);
+      expect(find.text('XDownloader 2.5.0', findRichText: true), findsNothing);
+      expect(find.text('重要修复', findRichText: true), findsOneWidget);
       await binding.convertFlutterSurfaceToImage();
       await tester.pumpAndSettle();
       await File(
@@ -81,6 +87,30 @@ void main() {
       expect(f.updateBackend.calls, ['enqueue']);
       await tester.tap(find.text('关闭'));
       await tester.pumpAndSettle();
+      await File('${Directory.systemTemp.path}/xdl_probe_home_grey_dark.png')
+          .writeAsBytes(await binding.takeScreenshot('home-grey-dark'));
+      final art = find.byKey(const Key('home_empty_art'));
+      final artY = tester.getCenter(art).dy;
+      final pager = find.byType(PageView);
+      final size = tester.getSize(pager);
+      final gesture = await tester.startGesture(
+        tester.getTopLeft(pager) + Offset(size.width * .85, size.height * .3),
+      );
+      await gesture.moveBy(Offset(-size.width * .35, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(art).dy, closeTo(artY, .1));
+      await gesture.moveBy(Offset(-size.width * .3, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(art).dy, closeTo(artY, .1));
+      await File('${Directory.systemTemp.path}/xdl_probe_swipe_stable_dark.png')
+          .writeAsBytes(await binding.takeScreenshot('swipe-stable-dark'));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('nav_favorites')));
+      await tester.pumpAndSettle();
+      await File(
+        '${Directory.systemTemp.path}/xdl_probe_nav_favorites_dark.png',
+      ).writeAsBytes(await binding.takeScreenshot('nav-favorites-dark'));
       await tester.tap(find.byKey(const Key('nav_settings')));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
@@ -103,6 +133,8 @@ void main() {
         scrollable: find.byType(Scrollable).last,
       );
       await tester.pumpAndSettle();
+      await File('${Directory.systemTemp.path}/xdl_probe_about_cards_dark.png')
+          .writeAsBytes(await binding.takeScreenshot('about-cards-dark'));
       await tester.tap(guide);
       await tester.pumpAndSettle();
       expect(find.text('快速下载'), findsOneWidget);

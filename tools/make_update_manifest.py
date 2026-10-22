@@ -17,6 +17,28 @@ PROBE_MARKERS = (b'probeSeed', b'probeDelete', b'probeVerifyUpdate', b'probeLoad
 class ManifestError(Exception):
     pass
 
+def notes_from_changelog(text, version):
+    lines = text.lstrip('\ufeff').splitlines()
+    if not lines or lines[0].strip() != '# XDownloader ' + version:
+        raise ManifestError('Changelog heading must match the APK version')
+    end, fence = len(lines), None
+    for i in range(1, len(lines)):
+        line = lines[i]
+        if fence:
+            if re.fullmatch(r' {0,3}' + re.escape(fence[0]) + '{' + str(fence[1]) + r',}[ \t]*', line):
+                fence = None
+            continue
+        marker = re.match(r'^ {0,3}(`{3,}|~{3,})', line)
+        if marker:
+            fence = (marker[1][0], len(marker[1]))
+        elif re.match(r'^#{1,2}\s+XDownloader\s+\d', line):
+            end = i
+            break
+    body = '\n'.join(lines[1:end]).strip('\r\n')
+    if not body.strip():
+        raise ManifestError('Release notes must contain a description')
+    return body + '\n'
+
 def sha256(path):
     with Path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -93,15 +115,19 @@ def main():
     p.add_argument('--apksigner', type=Path, required=True)
     p.add_argument('--expected-certificate', default=OFFICIAL_CERTIFICATE)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--changelog', type=Path, help='Generate heading-free RELEASE_NOTES.md from the current changelog section')
     args = p.parse_args()
     try:
         if args.output.exists() and any(args.output.iterdir()):
             raise ManifestError('Output directory must be empty; published metadata is immutable')
         manifest = build_manifest(args.apk, args.channel, args.tag,
             inspect=lambda path: inspect_apk(path, args.aapt2, args.apksigner), expected_certificate=args.expected_certificate.lower())
+        notes = notes_from_changelog(args.changelog.read_text(encoding='utf-8'), manifest['versionName']) if args.changelog else None
         args.output.mkdir(parents=True, exist_ok=True)
         (args.output / 'update.json').write_bytes((json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
         (args.output / 'SHA256SUMS.txt').write_bytes(('\n'.join(a['sha256'] + '  ' + a['name'] for a in manifest['assets']) + '\n').encode('utf-8'))
+        if notes is not None:
+            (args.output / 'RELEASE_NOTES.md').write_text(notes, encoding='utf-8')
         print(f'Validated {len(manifest["assets"])} APKs; {manifest["versionName"]}/{manifest["versionCode"]} {args.channel} metadata ready.')
     except (ManifestError, subprocess.CalledProcessError, zipfile.BadZipFile) as exc:
         p.exit(1, f'Release metadata failed: {exc}\n')

@@ -28,6 +28,8 @@ The update protocol uses `update.json` and `SHA256SUMS.txt` attached to each Git
 
 Update `client/assets/CHANGELOG.md` with each release so the offline changelog matches the installed version. It shares the themed Markdown renderer with downloaded release notes; embedded images are not loaded. Keep the changelog in the reviewed public-file inventory when exporting sources.
 
+Pass `--changelog client/assets/CHANGELOG.md` to `tools/make_update_manifest.py` to generate `RELEASE_NOTES.md` without a duplicate version heading. Use `XDownloader X.Y.Z` as the GitHub Release title and the generated file as `--notes-file`. The app reads GitHub's `name` as its update title and renders only the description below it; offline changelog version headings remain intact.
+
 ## App icon
 
 The transparent source is `client/assets/branding/app_icon.png`. From `client/`, run `dart run flutter_launcher_icons` to regenerate the Android launcher and adaptive foreground densities using the pinned development tool. Keep artwork alpha, the white adaptive background and the configured inset; this tool is not an application runtime dependency.

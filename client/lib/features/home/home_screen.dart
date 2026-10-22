@@ -54,18 +54,6 @@ class _HomeEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // Keep luminance increasing in both themes so the artwork never becomes
-    // a photographic negative, while retaining its original transparency.
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final low = dark ? colors.surface : colors.primary;
-    final high = dark ? colors.primary : colors.surface;
-    List<double> channel(double foreground, double background) => [
-      (background - foreground) * .2126,
-      (background - foreground) * .7152,
-      (background - foreground) * .0722,
-      0,
-      foreground * 255,
-    ];
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
         child: ConstrainedBox(
@@ -76,23 +64,41 @@ class _HomeEmptyState extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ExcludeSemantics(
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.matrix([
-                      ...channel(low.r, high.r),
-                      ...channel(low.g, high.g),
-                      ...channel(low.b, high.b),
-                      0,
-                      0,
-                      0,
-                      1,
-                      0,
-                    ]),
-                    child: Image.asset(
-                      'assets/branding/app_icon.png',
-                      key: const Key('home_empty_art'),
-                      width: constraints.maxHeight < 240 ? 72 : 144,
-                      height: constraints.maxHeight < 240 ? 72 : 144,
-                      cacheWidth: 432,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Opacity(
+                      opacity: .35,
+                      child: ColorFiltered(
+                        colorFilter: const ColorFilter.matrix([
+                          .2126,
+                          .7152,
+                          .0722,
+                          0,
+                          0,
+                          .2126,
+                          .7152,
+                          .0722,
+                          0,
+                          0,
+                          .2126,
+                          .7152,
+                          .0722,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          1,
+                          0,
+                        ]),
+                        child: Image.asset(
+                          'assets/branding/app_icon.png',
+                          key: const Key('home_empty_art'),
+                          width: constraints.maxHeight < 240 ? 72 : 144,
+                          height: constraints.maxHeight < 240 ? 72 : 144,
+                          cacheWidth: 432,
+                        ),
+                      ),
                     ),
                   ),
                 ),

@@ -49,16 +49,25 @@ class UpdateRepository extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       final prefs = UpdatePreferences.fromJson(await store.read('updates'));
-      final info = await backend.installedApp();
-      final state = await backend.snapshot();
       if (_disposed) return;
       _preferences = prefs;
+    } catch (e) {
+      if (_disposed) return;
+      _preferences = const UpdatePreferences(autoCheck: false);
+      _error = _failure(e);
+      _notify();
+      return;
+    }
+    try {
+      final info = await backend.installedApp();
+      if (_disposed) return;
       _installed = info;
+      final state = await backend.snapshot();
+      if (_disposed) return;
       _transfer = state;
       _error = null;
     } catch (e) {
       if (_disposed) return;
-      _preferences = const UpdatePreferences(autoCheck: false);
       _error = _failure(e);
     }
     _notify();

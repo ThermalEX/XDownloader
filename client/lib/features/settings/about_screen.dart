@@ -69,6 +69,7 @@ class AboutScreen extends StatelessWidget {
           SettingsPanel(
             child: ListTile(
               key: const Key('changelog_entry'),
+              minTileHeight: 72,
               leading: const SettingsIcon(Icons.history_outlined),
               title: const Text('更新日志'),
               trailing: const Icon(Icons.chevron_right),

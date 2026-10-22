@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xdownloader/app/app.dart';
+import 'package:xdownloader/features/home/home_screen.dart';
 import 'package:xdownloader/features/settings/settings_group.dart';
 
 import '../support/app_fixture.dart';
@@ -49,11 +50,11 @@ void main() {
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(input).maxLines, 1);
-      final page = find.byType(PageView);
+      final content = find.byType(HomeScreen);
       final heart = find.byKey(const Key('favorite_current'));
       expect(
         tester.getTopLeft(heart).dy,
-        greaterThanOrEqualTo(tester.getBottomLeft(page).dy),
+        greaterThanOrEqualTo(tester.getBottomLeft(content).dy),
       );
       expect(
         tester.getBottomLeft(heart).dy,

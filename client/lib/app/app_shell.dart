@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'bootstrap.dart';
-import 'favorite_icon.dart';
 import '../core/models/app_failure.dart';
+import '../core/models/app_update.dart';
 import '../features/home/home_controller.dart';
 import '../features/home/home_screen.dart';
 import '../features/downloads/downloads_screen.dart';
@@ -23,6 +23,8 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   late final HomeController home;
   StreamSubscription<String>? _shares;
   final _pages = PageController();
+  ReleaseCheck? _pendingStartup;
+  bool _promptScheduled = false;
   int index = 0;
   @override
   void initState() {
@@ -40,18 +42,47 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _checkAtStartup() async {
     final updates = widget.dependencies.updates;
     final result = await updates.check(automatic: true);
-    if (!mounted ||
-        !updates.preferences.autoCheck ||
+    if (!mounted || result?.candidate == null) return;
+    _pendingStartup = result;
+    _scheduleStartupPrompt();
+  }
+
+  void _scheduleStartupPrompt() {
+    if (!mounted || _pendingStartup == null || _promptScheduled) return;
+    _promptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _promptScheduled = false;
+      _showPendingStartupPrompt();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _showPendingStartupPrompt() {
+    if (!mounted || _pendingStartup == null) return;
+    final updates = widget.dependencies.updates;
+    if (!updates.preferences.autoCheck ||
         !updates.preferences.showUpdatePrompt ||
-        result?.candidate == null ||
-        !identical(result, updates.result) ||
+        !identical(_pendingStartup, updates.result)) {
+      _pendingStartup = null;
+      return;
+    }
+    // Defer while another route or system window covers the startup screen.
+    // A newer check or channel change invalidates this accepted result.
+    if (updates.checking ||
         ModalRoute.of(context)?.isCurrent != true ||
         (WidgetsBinding.instance.lifecycleState != null &&
             WidgetsBinding.instance.lifecycleState !=
                 AppLifecycleState.resumed)) {
       return;
     }
-    await showAppUpdateDialog(context, updates);
+    _pendingStartup = null;
+    unawaited(showAppUpdateDialog(context, updates));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleStartupPrompt();
   }
 
   Future<void> _listen() async {
@@ -96,6 +127,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _scheduleStartupPrompt();
       unawaited(widget.dependencies.updates.refreshTransfer());
       unawaited(runAction(context, widget.dependencies.downloads.reconcile));
       unawaited(runAction(context, home.onResumed));
@@ -158,7 +190,14 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                       home.setVisible(value == 0);
                     },
                     children: [
-                      _PersistentPage(child: HomeScreen(controller: home)),
+                      _PersistentPage(
+                        child: Column(
+                          children: [
+                            Expanded(child: HomeScreen(controller: home)),
+                            HomeComposer(controller: home),
+                          ],
+                        ),
+                      ),
                       _PersistentPage(
                         child: DownloadsScreen(
                           repository: widget.dependencies.downloads,
@@ -168,9 +207,16 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                         ),
                       ),
                       _PersistentPage(
-                        child: FavoritesScreen(
-                          dependencies: widget.dependencies,
-                          onOpen: _share,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: FavoritesScreen(
+                                dependencies: widget.dependencies,
+                                onOpen: _share,
+                              ),
+                            ),
+                            FavoritesActions(dependencies: widget.dependencies),
+                          ],
                         ),
                       ),
                       _PersistentPage(
@@ -182,16 +228,6 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-              ),
-            ),
-            Align(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: switch (index) {
-                  0 => HomeComposer(controller: home),
-                  2 => FavoritesActions(dependencies: widget.dependencies),
-                  _ => const SizedBox.shrink(),
-                },
               ),
             ),
           ],
@@ -237,13 +273,10 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                         icon: Icon(Icons.download_outlined),
                         label: '下载',
                       ),
-                      NavigationDestination(
-                        key: const Key('nav_favorites'),
-                        icon: const Icon(Icons.favorite_border),
-                        selectedIcon: Icon(
-                          Icons.favorite,
-                          color: savedHeartColor(context),
-                        ),
+                      const NavigationDestination(
+                        key: Key('nav_favorites'),
+                        icon: Icon(Icons.favorite_border),
+                        selectedIcon: Icon(Icons.favorite),
                         label: '收藏',
                       ),
                       const NavigationDestination(

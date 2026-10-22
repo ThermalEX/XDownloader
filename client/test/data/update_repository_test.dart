@@ -44,6 +44,29 @@ void main() {
     repo.dispose();
     await temp.delete(recursive: true);
   });
+  for (final autoCheck in [true, false]) {
+    test(
+      'transient platform failure preserves startup preferences $autoCheck',
+      () async {
+        await repo.setChannel(UpdateChannel.beta);
+        await repo.setShowUpdatePrompt(false);
+        await repo.setAutoCheck(autoCheck);
+        final before = await store.read('updates');
+        final checks = client.checks;
+        backend.readError = const AppFailure(FailureKind.storage, '暂时不可用');
+        await repo.initialize();
+        expect(repo.preferences.autoCheck, autoCheck);
+        expect(repo.preferences.channel, UpdateChannel.beta);
+        expect(repo.preferences.showUpdatePrompt, false);
+        expect(repo.error, isNotNull);
+        backend.readError = null;
+        client.respond = (channel) async => result(channel);
+        await repo.check(automatic: true);
+        expect(client.checks, checks + (autoCheck ? 1 : 0));
+        expect(await store.read('updates'), before);
+      },
+    );
+  }
   test(
     'automatic checks coalesce in flight but run again at the next startup',
     () async {

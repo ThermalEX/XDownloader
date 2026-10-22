@@ -10,6 +10,8 @@ InstalledAppInfo fixtureInstalled({int code = 14}) => InstalledAppInfo(
 UpdateRelease fixtureUpdate({
   int code = 15,
   UpdateChannel channel = UpdateChannel.stable,
+  String title = '',
+  String notes = '新版说明',
 }) {
   final version = channel == UpdateChannel.beta ? '2.6.0-beta.1' : '2.5.0';
   final tag = 'v$version';
@@ -19,7 +21,8 @@ UpdateRelease fixtureUpdate({
     releasePage: Uri.parse(
       'https://github.com/ThermalEX/XDownloader/releases/tag/$tag',
     ),
-    notes: '新版说明',
+    title: title,
+    notes: notes,
     versionName: version,
     versionCode: code,
     channel: channel,

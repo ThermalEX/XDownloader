@@ -75,6 +75,7 @@ class UpdateRelease {
     required this.tag,
     required this.releasePage,
     required this.notes,
+    this.title = '',
     required this.versionName,
     required this.versionCode,
     required this.channel,
@@ -83,12 +84,39 @@ class UpdateRelease {
     required this.assets,
   });
   final int releaseId, versionCode, minSdk;
-  final String tag, notes, versionName, packageName;
+  final String tag, notes, title, versionName, packageName;
   final Uri releasePage;
   final UpdateChannel channel;
 
   /// Compatible assets in preference order; first is the download choice.
   final List<UpdateAsset> assets;
+  String get displayTitle =>
+      title.trim().isEmpty ? 'XDownloader $versionName' : title.trim();
+  String get displayNotes {
+    final lines = notes.split(RegExp(r'\r?\n'));
+    var first = 0;
+    while (first < lines.length && lines[first].trim().isEmpty) {
+      first++;
+    }
+    if (first == lines.length) return notes;
+    final heading = RegExp(r'^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$')
+        .firstMatch(lines[first]);
+    if (heading == null ||
+        !{
+          displayTitle,
+          'XDownloader $versionName',
+          versionName,
+          'v$versionName',
+        }.contains(heading[1]!.trim())) {
+      return notes;
+    }
+    first++;
+    while (first < lines.length && lines[first].trim().isEmpty) {
+      first++;
+    }
+    return lines.skip(first).join('\n');
+  }
+
   String get candidateId => '$releaseId:$versionCode:${assets.first.sha256}';
   Map<String, Object?> toJson() => {
     'candidateId': candidateId,
@@ -96,6 +124,7 @@ class UpdateRelease {
     'tag': tag,
     'releasePage': releasePage.toString(),
     'notes': notes,
+    'title': title,
     'versionName': versionName,
     'versionCode': versionCode,
     'channel': channel.name,

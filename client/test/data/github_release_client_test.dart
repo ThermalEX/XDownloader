@@ -73,7 +73,11 @@ void main() {
       client: MockClient((request) async {
         expect(request.headers.containsKey('Authorization'), isFalse);
         if (request.url.host == 'api.github.com') {
-          return http.Response(jsonEncode(releases), 200);
+          return http.Response(
+            jsonEncode(releases),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
         }
         final custom = response?.call(request.url);
         return http.Response(
@@ -98,6 +102,26 @@ void main() {
     }
   }
 
+  test(
+    'release title comes from GitHub name, independent of description',
+    () async {
+      final candidate = (await check([
+        {
+          ...release(16),
+          'name': '  XDownloader 发布标题  ',
+          'body': '## 正文说明\n\n- 修复下载',
+        },
+      ])).candidate!;
+      expect(candidate.title, 'XDownloader 发布标题');
+      expect(candidate.notes, '## 正文说明\n\n- 修复下载');
+      for (final name in [null, '', '   ', 123]) {
+        final fallback = (await check([
+          {...release(16), 'name': name},
+        ])).candidate!;
+        expect(fallback.displayTitle, 'XDownloader 2.5.0');
+      }
+    },
+  );
   test(
     'stable excludes beta and beta includes newest stable or prerelease',
     () async {
