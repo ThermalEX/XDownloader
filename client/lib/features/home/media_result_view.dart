@@ -82,16 +82,50 @@ class MediaResultView extends StatelessWidget {
           label: Text('最佳画质 · ${size(item.variants.first)}'),
         ),
         for (final variant in item.variants)
-          Semantics(
-            label: '下载视频 ${item.index}，${size(variant)}',
-            excludeSemantics: true,
-            button: true,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(size(variant)),
-              subtitle: const Text('MP4'),
-              trailing: const Icon(Icons.download_outlined),
-              onTap: () => onDownload(variant),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Semantics(
+              label: '下载视频 ${item.index}，${size(variant)}',
+              excludeSemantics: true,
+              button: true,
+              child: Material(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(20),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => onDownload(variant),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                size(variant),
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'MP4',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Icon(Icons.download_outlined),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
       ],

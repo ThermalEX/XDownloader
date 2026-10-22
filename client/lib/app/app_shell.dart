@@ -85,6 +85,14 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(home.acceptSharedText(text));
   }
 
+  void _openTab(int value) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => index = value);
+    home.setVisible(value == 0);
+    if (_pages.hasClients) _pages.jumpToPage(value);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -151,6 +159,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                 _PersistentPage(
                   child: DownloadsScreen(
                     repository: widget.dependencies.downloads,
+                    favorites: widget.dependencies.favorites,
                     settings: widget.dependencies.settings,
                     onParse: _share,
                   ),
@@ -162,7 +171,10 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                   ),
                 ),
                 _PersistentPage(
-                  child: SettingsScreen(dependencies: widget.dependencies),
+                  child: SettingsScreen(
+                    dependencies: widget.dependencies,
+                    onOpenTab: _openTab,
+                  ),
                 ),
               ],
             ),

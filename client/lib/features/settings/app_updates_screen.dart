@@ -121,13 +121,38 @@ class _AppUpdatesScreenState extends State<AppUpdatesScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: FilledButton.tonalIcon(
-                      onPressed: repo.operating
-                          ? null
-                          : () =>
-                                showAppUpdateDialog(context, repo, check: true),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('检查更新'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        FilledButton.tonalIcon(
+                          key: const Key('update_check'),
+                          onPressed: repo.operating
+                              ? null
+                              : () => showAppUpdateDialog(
+                                  context,
+                                  repo,
+                                  check: true,
+                                ),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('检查更新'),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          key: const Key('update_release_page'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                          onPressed: () =>
+                              runAction(context, () => repo.openPage()),
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('前往发布页下载'),
+                        ),
+                      ],
                     ),
                   ),
                   if (repo.transfer.phase != UpdatePhase.idle)
@@ -137,11 +162,6 @@ class _AppUpdatesScreenState extends State<AppUpdatesScreen> {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => showAppUpdateDialog(context, repo),
                     ),
-                  TextButton.icon(
-                    onPressed: () => runAction(context, () => repo.openPage()),
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('前往发布页下载'),
-                  ),
                 ],
               ),
             ],

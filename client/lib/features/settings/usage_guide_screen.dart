@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
 
+import '../../app/bootstrap.dart';
+import 'sources_screen.dart';
+import 'naming_settings_screen.dart';
+import 'storage_settings_screen.dart';
+import 'application_settings_screen.dart';
+import 'app_updates_screen.dart';
 import 'settings_group.dart';
 
 class UsageGuideScreen extends StatelessWidget {
-  const UsageGuideScreen({super.key});
+  const UsageGuideScreen({
+    super.key,
+    required this.dependencies,
+    this.onOpenTab,
+  });
+  final AppDependencies dependencies;
+  final ValueChanged<int>? onOpenTab;
 
   static const _sections = <(String, List<String>)>[
     (
       '快速下载',
       [
         '从 X 分享帖子到 XDownloader，或在首页粘贴 x.com / twitter.com 链接；整段分享文案也可以。无需在应用中登录 X。',
-        '点击输入栏右侧的解析按钮，选择“最佳画质”或下方分辨率开始下载。帖子包含多个视频时，可分别下载。',
+        '点击粘贴按钮会直接解析；手动输入后点击右侧解析按钮。选择“最佳画质”或下方分辨率开始下载。帖子包含多个视频时，可分别下载。',
       ],
     ),
     (
       '下载与历史',
       [
-        '下载页显示进度与已保存视频。点封面可在应用内播放；长按进入多选，可批量删除文件。',
+        '下载页显示进度与已保存视频。点封面可在应用内播放；长按进入多选，可批量收藏原帖链接、删除文件或移除记录。无原链接的旧记录无法加入收藏。',
         '“下载历史”保留成功、失败和取消记录，删除视频不会删除历史。点击历史记录可重新解析链接。',
         '文件保存到 Download/XDownloader，可在“设置 → 下载与存储”查看位置。',
       ],
@@ -32,7 +44,7 @@ class UsageGuideScreen extends StatelessWidget {
       '收藏管理',
       [
         '首页爱心收藏当前帖子。收藏页可手动添加或从剪贴板添加链接，点击收藏会重新解析帖子。',
-        '筛选图标可选择排序与分类；“默认顺序”和“全部”可恢复默认视图。三个点菜单支持改名和分类。',
+        '顶部分类栏可左右滑动、点按切换，“＋”可新增分类；筛选图标可选择排序或多选分类，显示所选分类的合集。“默认顺序”和“全部”可恢复默认视图。三个点菜单支持改名和分类。',
         '点击列表前方红心取消收藏，随后可在消息中点击“撤回”。取消收藏不会删除下载的视频。',
       ],
     ),
@@ -67,6 +79,69 @@ class UsageGuideScreen extends StatelessWidget {
     ),
   ];
 
+  List<Widget> _actions(BuildContext context, String section) {
+    Widget link(String key, String label, Widget screen) => TextButton.icon(
+      key: Key(key),
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute<void>(builder: (_) => screen),
+      ),
+      icon: const Icon(Icons.arrow_forward),
+      label: Text(label),
+    );
+    Widget tab(int index, String label) => TextButton.icon(
+      key: Key('guide_tab_$index'),
+      onPressed: () => onOpenTab!(index),
+      icon: const Icon(Icons.arrow_forward),
+      label: Text(label),
+    );
+    return switch (section) {
+      '快速下载' => [if (onOpenTab != null) tab(0, '前往解析')],
+      '下载与历史' => [
+        if (onOpenTab != null) tab(1, '前往下载'),
+        link(
+          'guide_storage',
+          '下载与存储',
+          StorageSettingsScreen(repository: dependencies.downloads),
+        ),
+      ],
+      '收藏管理' => [if (onOpenTab != null) tab(2, '前往收藏')],
+      '下载源' => [
+        link(
+          'guide_sources',
+          '管理下载源',
+          SourcesScreen(
+            repository: dependencies.sources,
+            parser: dependencies.parser,
+            readClipboard: dependencies.readClipboard,
+          ),
+        ),
+      ],
+      '文件命名' => [
+        link(
+          'guide_naming',
+          '设置重命名规则',
+          NamingSettingsScreen(repository: dependencies.settings),
+        ),
+      ],
+      '隐私与剪贴板' => [
+        link(
+          'guide_application',
+          '打开应用设置',
+          ApplicationSettingsScreen(repository: dependencies.settings),
+        ),
+      ],
+      '应用更新' => [
+        link(
+          'guide_updates',
+          '打开更新设置',
+          AppUpdatesScreen(repository: dependencies.updates),
+        ),
+      ],
+      _ => [],
+    };
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('使用说明')),
@@ -86,6 +161,11 @@ class UsageGuideScreen extends StatelessWidget {
                       if (i > 0) const SizedBox(height: 12),
                       Text(section.$2[i]),
                     ],
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _actions(context, section.$1),
+                    ),
                   ],
                 ),
               ),

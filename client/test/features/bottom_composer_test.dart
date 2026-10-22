@@ -23,8 +23,6 @@ void main() {
       await tester.tap(find.bySemanticsLabel('从剪贴板粘贴'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('清空'), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('解析链接'));
-      await tester.pumpAndSettle();
       expect(find.text('中文视频'), findsOneWidget);
       await tester.ensureVisible(find.byKey(const Key('favorite_current')));
       await tester.pumpAndSettle();

@@ -95,9 +95,14 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> paste() async {
+    if (_disposed || !_visible) return;
     final generation = _generation;
     final text = await dependencies.readClipboard();
-    if (!_disposed && generation == _generation && text != null) setInput(text);
+    if (_disposed || !_visible || generation != _generation) return;
+    if (text == null || PostLink.tryParse(text) == null) {
+      throw const AppFailure(FailureKind.invalidLink, '剪贴板中没有有效的 X 帖子链接');
+    }
+    await parse(text);
   }
 
   Future<void> download(MediaVariant variant) async {

@@ -102,8 +102,6 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.bySemanticsLabel('从剪贴板粘贴'));
       await tester.pumpAndSettle();
-      await tester.tap(find.bySemanticsLabel('解析链接'));
-      await tester.pumpAndSettle();
       expect(find.text('视频 1'), findsOneWidget);
       expect(find.text('视频 2'), findsOneWidget);
       expect(find.text('https://x.com/author/status/123456'), findsOneWidget);

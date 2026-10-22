@@ -10,8 +10,9 @@ import 'settings_group.dart';
 import 'app_updates_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.dependencies});
+  const SettingsScreen({super.key, required this.dependencies, this.onOpenTab});
   final AppDependencies dependencies;
+  final ValueChanged<int>? onOpenTab;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +83,7 @@ class SettingsScreen extends StatelessWidget {
               '关于',
               '版本与开源信息',
               Icons.info_outline,
-              AboutScreen(dependencies: dependencies),
+              AboutScreen(dependencies: dependencies, onOpenTab: onOpenTab),
             ),
           ],
         ),

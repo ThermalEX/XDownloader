@@ -39,9 +39,11 @@ void main() {
       );
       await openFilter(tester);
       await tester.tap(find.text('名称顺序'));
-      await tester.ensureVisible(find.text('音乐'));
+      await tester.ensureVisible(
+        find.byKey(const Key('favorite_filter_category:音乐')),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('音乐'));
+      await tester.tap(find.byKey(const Key('favorite_filter_category:音乐')));
       await tester.tap(find.text('应用'));
       await tester.pumpAndSettle();
       expect(fixture.favorites.sort, FavoriteSort.title);
@@ -54,9 +56,9 @@ void main() {
       );
       await openFilter(tester);
       await tester.tap(find.text('默认顺序'));
-      await tester.ensureVisible(find.text('全部'));
+      await tester.ensureVisible(find.byKey(const Key('favorite_filter_all')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('全部'));
+      await tester.tap(find.byKey(const Key('favorite_filter_all')));
       await tester.tap(find.text('应用'));
       await tester.pumpAndSettle();
       expect(fixture.favorites.sort, FavoriteSort.defaultOrder);
@@ -147,11 +149,13 @@ void main() {
         await openFilter(tester);
         await tester.tap(find.text('名称顺序'));
         await tester.scrollUntilVisible(
-          find.text('较长的分类名称'),
+          find.byKey(const Key('favorite_filter_category:较长的分类名称')),
           150,
           scrollable: find.byType(Scrollable).last,
         );
-        await tester.tap(find.text('较长的分类名称'));
+        await tester.tap(
+          find.byKey(const Key('favorite_filter_category:较长的分类名称')),
+        );
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('取消'));
         await tester.pumpAndSettle();
@@ -179,8 +183,10 @@ void main() {
       await tester.tap(find.byKey(const Key('nav_favorites')));
       await tester.pumpAndSettle();
       await openFilter(tester);
-      await tester.ensureVisible(find.text('音乐'));
-      await tester.tap(find.text('音乐'));
+      await tester.ensureVisible(
+        find.byKey(const Key('favorite_filter_category:音乐')),
+      );
+      await tester.tap(find.byKey(const Key('favorite_filter_category:音乐')));
       await tester.tap(find.text('应用'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('favorite_remove_123456')));

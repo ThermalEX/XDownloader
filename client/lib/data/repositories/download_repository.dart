@@ -5,6 +5,7 @@ import 'dart:async';
 import '../../core/models/app_failure.dart';
 import '../../core/models/download.dart';
 import '../../core/models/download_history.dart';
+import '../../core/parsing/post_link.dart';
 import '../../platform/download_backend.dart';
 import '../storage/snapshot_store.dart';
 import '../storage/serial_queue.dart';
@@ -24,6 +25,25 @@ class DownloadRepository extends ChangeNotifier {
   AppFailure? storageFailure;
   List<DownloadRecord> get records => _records;
   List<DownloadHistoryEntry> get history => _history;
+  ({Uri url, String title})? sourceForFavorite(String taskId) {
+    final record = _records.where((r) => r.taskId == taskId).firstOrNull;
+    if (record == null || record.phase != DownloadPhase.completed) return null;
+    final history = _history.where((h) => h.taskId == taskId).firstOrNull;
+    for (final url in [record.request.postUrl, history?.postUrl]) {
+      final post = url == null ? null : PostLink.tryParse(url.toString());
+      if (post != null) {
+        return (
+          url: post.canonicalUrl,
+          title: record.request.displayName.replaceFirst(
+            RegExp(r'\.mp4$', caseSensitive: false),
+            '',
+          ),
+        );
+      }
+    }
+    return null;
+  }
+
   List<String> get diagnostics => List.unmodifiable(_diagnostics);
   void _note(Object error) {
     final value = '$error';

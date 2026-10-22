@@ -25,11 +25,10 @@ class FavoriteRepository extends ChangeNotifier {
   final SnapshotStore store;
   final _queue = SerialQueue();
   List<FavoriteLink> _items = [];
+  List<String> _categories = [];
   FavoriteSort _sort = FavoriteSort.defaultOrder;
   FavoriteSort get sort => _sort;
-  List<String> get categories =>
-      (_items.map((f) => f.category).where((c) => c.isNotEmpty).toSet().toList()
-        ..sort());
+  List<String> get categories => List.unmodifiable(_categories);
   List<FavoriteLink> get items {
     if (_sort == FavoriteSort.defaultOrder) return List.unmodifiable(_items);
     final positions = {
@@ -65,6 +64,19 @@ class FavoriteRepository extends ChangeNotifier {
         throw const FormatException('Duplicate favorite');
       }
       _items = items;
+      final declared = (data['categories'] as List? ?? []).cast<String>();
+      if (declared.any((c) => c.trim().isEmpty || c.runes.length > 40) ||
+          declared.toSet().length != declared.length) {
+        throw const FormatException('Invalid categories');
+      }
+      final used =
+          items
+              .map((f) => f.category)
+              .where((c) => c.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      _categories = {...declared, ...used}.toList();
       _sort = FavoriteSort.values.byName(
         data['sort'] as String? ?? 'defaultOrder',
       );
@@ -73,18 +85,37 @@ class FavoriteRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> _save(List<FavoriteLink> next, {FavoriteSort? sort}) async {
+  Future<void> _save(
+    List<FavoriteLink> next, {
+    FavoriteSort? sort,
+    List<String>? categories,
+  }) async {
+    final groups = {
+      ...(categories ?? _categories),
+      ...next.map((f) => f.category).where((c) => c.isNotEmpty),
+    }.toList();
     await store.write('favorites', {
       'items': next.map((f) => f.toJson()).toList(),
       'sort': (sort ?? _sort).name,
+      'categories': groups,
     });
     _items = next;
+    _categories = groups;
     _sort = sort ?? _sort;
     notifyListeners();
   }
 
   Future<void> setSort(FavoriteSort value) =>
       _queue.run(() => _save(_items, sort: value));
+  Future<bool> addCategory(String input) => _queue.run(() async {
+    final name = input.trim();
+    if (name.isEmpty || name.runes.length > 40) {
+      throw const AppFailure(FailureKind.malformed, '分类名称需为 1–40 字');
+    }
+    if (_categories.contains(name)) return false;
+    await _save(_items, categories: [..._categories, name]);
+    return true;
+  });
   Future<void> update(
     String postId, {
     required String title,

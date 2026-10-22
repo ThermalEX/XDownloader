@@ -34,6 +34,11 @@ class SnapshotSchema {
             return false;
           }
         case 'favorites':
+          final groups = (data['categories'] as List? ?? []).cast<String>();
+          if (groups.any((c) => c.trim().isEmpty || c.runes.length > 40) ||
+              groups.toSet().length != groups.length) {
+            return false;
+          }
           if (data['sort'] != null &&
               !const [
                 'defaultOrder',

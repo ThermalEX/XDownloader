@@ -42,11 +42,13 @@ client/android/gradle/wrapper/gradle-wrapper.properties
 client/android/settings.gradle.kts
 client/assets/branding/app_icon.png
 client/integration_test/app_flow_test.dart
-client/integration_test/update_prompt_test.dart
 client/integration_test/app_updates_test.dart
 client/integration_test/legacy_migration_test.dart
+client/integration_test/library_categories_test.dart
 client/integration_test/player_controls_test.dart
 client/integration_test/storage_backend_test.dart
+client/integration_test/ui_polish_test.dart
+client/integration_test/update_prompt_test.dart
 client/lib/app/app.dart
 client/lib/app/app_shell.dart
 client/lib/app/app_theme.dart
@@ -84,6 +86,7 @@ client/lib/features/downloads/material_player_controls.dart
 client/lib/features/downloads/player_orientation_button.dart
 client/lib/features/downloads/video_preview_screen.dart
 client/lib/features/downloads/video_thumbnail.dart
+client/lib/features/favorites/favorite_category_bar.dart
 client/lib/features/favorites/favorite_filter_sheet.dart
 client/lib/features/favorites/favorites_screen.dart
 client/lib/features/home/home_controller.dart
@@ -118,8 +121,10 @@ client/test/core/additional_sources_test.dart
 client/test/core/app_update_test.dart
 client/test/core/parse_client_test.dart
 client/test/core/parsing_test.dart
+client/test/data/download_favorite_source_test.dart
 client/test/data/download_history_test.dart
 client/test/data/download_repository_test.dart
+client/test/data/favorite_categories_test.dart
 client/test/data/favorite_repository_test.dart
 client/test/data/github_release_client_test.dart
 client/test/data/legacy_migration_test.dart
@@ -129,8 +134,10 @@ client/test/data/source_repository_test.dart
 client/test/data/update_repository_test.dart
 client/test/features/app_updates_test.dart
 client/test/features/bottom_composer_test.dart
+client/test/features/download_favorite_test.dart
 client/test/features/download_history_test.dart
 client/test/features/downloads_test.dart
+client/test/features/favorite_categories_test.dart
 client/test/features/favorite_controls_test.dart
 client/test/features/favorites_test.dart
 client/test/features/home_test.dart
@@ -143,6 +150,7 @@ client/test/features/source_exchange_ui_test.dart
 client/test/features/source_health_test.dart
 client/test/features/startup_theme_test.dart
 client/test/features/ui_polish_test.dart
+client/test/features/ui_refinements_test.dart
 client/test/features/update_prompt_test.dart
 client/test/features/usage_guide_test.dart
 client/test/features/video_preview_test.dart

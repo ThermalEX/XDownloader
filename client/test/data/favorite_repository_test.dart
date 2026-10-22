@@ -114,7 +114,7 @@ void main() {
       await restored.initialize();
       expect(restored.sort, FavoriteSort.oldest);
       expect(restored.items.map((f) => f.postId), ['123456', '234567']);
-      expect(restored.categories, ['电影', '音乐']);
+      expect(restored.categories, ['音乐', '电影']);
       expect(restored.items.first.category, '音乐');
       await restored.add('https://x.com/a/status/123456', title: '自动解析标题');
       expect(restored.items.first.title, 'Beta');

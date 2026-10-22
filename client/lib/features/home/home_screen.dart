@@ -13,33 +13,103 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
-    builder: (context, _) => ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-      children: [
-        if (controller.busy) const LinearProgressIndicator(),
-        if (controller.error != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              controller.error!.message,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+    builder: (context, _) =>
+        controller.result == null &&
+            !controller.busy &&
+            controller.error == null
+        ? const _HomeEmptyState()
+        : ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+            children: [
+              if (controller.busy) const LinearProgressIndicator(),
+              if (controller.error != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    controller.error!.message,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (controller.result != null)
+                MediaResultView(
+                  result: controller.result!,
+                  onDownload: (variant) => runAction(context, () async {
+                    await controller.download(variant);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('已加入下载，可在下载页查看进度')),
+                      );
+                    }
+                  }),
+                ),
+            ],
+          ),
+  );
+}
+
+class _HomeEmptyState extends StatelessWidget {
+  const _HomeEmptyState();
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    // Keep luminance increasing in both themes so the artwork never becomes
+    // a photographic negative, while retaining its original transparency.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final low = dark ? colors.surface : colors.primary;
+    final high = dark ? colors.primary : colors.surface;
+    List<double> channel(double foreground, double background) => [
+      (background - foreground) * .2126,
+      (background - foreground) * .7152,
+      (background - foreground) * .0722,
+      0,
+      foreground * 255,
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ExcludeSemantics(
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.matrix([
+                      ...channel(low.r, high.r),
+                      ...channel(low.g, high.g),
+                      ...channel(low.b, high.b),
+                      0,
+                      0,
+                      0,
+                      1,
+                      0,
+                    ]),
+                    child: Image.asset(
+                      'assets/branding/app_icon.png',
+                      key: const Key('home_empty_art'),
+                      width: constraints.maxHeight < 240 ? 72 : 144,
+                      height: constraints.maxHeight < 240 ? 72 : 144,
+                      cacheWidth: 432,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '还没有解析链接呢~',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: colors.onSurfaceVariant),
+                ),
+              ],
             ),
           ),
-        if (controller.result != null)
-          MediaResultView(
-            result: controller.result!,
-            onDownload: (variant) => runAction(context, () async {
-              await controller.download(variant);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已加入下载，可在下载页查看进度')),
-                );
-              }
-            }),
-          ),
-      ],
-    ),
-  );
+        ),
+      ),
+    );
+  }
 }
 
 class HomeComposer extends StatefulWidget {
@@ -117,7 +187,10 @@ class _HomeComposerState extends State<HomeComposer>
               button: true,
               child: IconButton(
                 tooltip: '粘贴',
-                onPressed: () => runAction(context, home.paste),
+                onPressed: () {
+                  _focus.unfocus();
+                  runAction(context, home.paste);
+                },
                 icon: const Icon(Icons.content_paste),
               ),
             )
@@ -141,7 +214,7 @@ class _HomeComposerState extends State<HomeComposer>
                   alignment: Alignment.centerRight,
                   child: HomeFavoriteAction(home: home),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 9),
               ],
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,

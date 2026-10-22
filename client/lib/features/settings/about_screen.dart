@@ -7,8 +7,9 @@ import 'settings_group.dart';
 import 'usage_guide_screen.dart';
 
 class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key, required this.dependencies});
+  const AboutScreen({super.key, required this.dependencies, this.onOpenTab});
   final AppDependencies dependencies;
+  final ValueChanged<int>? onOpenTab;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('关于')),
@@ -56,7 +57,10 @@ class AboutScreen extends StatelessWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
-                  builder: (_) => const UsageGuideScreen(),
+                  builder: (_) => UsageGuideScreen(
+                    dependencies: dependencies,
+                    onOpenTab: onOpenTab,
+                  ),
                 ),
               ),
             ),

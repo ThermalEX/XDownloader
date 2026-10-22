@@ -9,6 +9,7 @@ import '../../core/models/favorite_link.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../core/parsing/post_link.dart';
 import 'favorite_filter_sheet.dart';
+import 'favorite_category_bar.dart';
 
 void _ensureVisible(AppDependencies dependencies) {
   if (dependencies.settings.value.privacyMode) {
@@ -59,10 +60,10 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   AppDependencies get dependencies => widget.dependencies;
-  String? _category;
+  Set<String> _categories = {};
   Future<void> _filter() => runAction(context, () async {
     _ensureVisible(dependencies);
-    final choice = await showModalBottomSheet<(FavoriteSort, String?)>(
+    final choice = await showModalBottomSheet<(FavoriteSort, Set<String>)>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -73,7 +74,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       builder: (_) => FavoriteFilterSheet(
         favorites: dependencies.favorites,
         settings: dependencies.settings,
-        category: _category,
+        categories: _categories,
       ),
     );
     if (choice == null || !mounted) return;
@@ -81,8 +82,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     await dependencies.favorites.setSort(choice.$1);
     if (mounted) {
       _ensureVisible(dependencies);
-      setState(() => _category = choice.$2);
+      setState(() => _categories = choice.$2);
     }
+  });
+
+  Future<void> _addCategory() => runAction(context, () async {
+    _ensureVisible(dependencies);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _CategoryInputDialog(dependencies: dependencies),
+    );
+    if (name == null || !mounted) return;
+    _ensureVisible(dependencies);
+    final added = await dependencies.favorites.addCategory(name);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(added ? '已添加分类' : '该分类已存在')));
   });
 
   Future<void> _remove(String id) => runAction(context, () async {
@@ -134,33 +149,54 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
         );
       }
-      final selected = _category;
+      final selected = _categories;
       final active =
           dependencies.favorites.sort != FavoriteSort.defaultOrder ||
-          selected != null;
+          selected.isNotEmpty;
       final colors = Theme.of(context).colorScheme;
       return Column(
         children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: IconButton(
-                key: const Key('favorite_filter'),
-                tooltip: active ? '排序与分类（已筛选）' : '排序与分类',
-                isSelected: active,
-                style: IconButton.styleFrom(
-                  backgroundColor: active
-                      ? colors.primaryContainer
-                      : Colors.transparent,
-                  foregroundColor: active
-                      ? colors.primary
-                      : colors.onSurfaceVariant,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FavoriteCategoryBar(
+                    categories: dependencies.favorites.categories,
+                    selected: selected,
+                    onSelected: (category) {
+                      if (!dependencies.settings.value.privacyMode) {
+                        setState(
+                          () =>
+                              _categories = category == null ? {} : {category},
+                        );
+                      }
+                    },
+                  ),
                 ),
-                onPressed: _filter,
-                icon: const Icon(Icons.filter_list),
-                selectedIcon: const Icon(Icons.filter_list_alt),
-              ),
+                IconButton(
+                  key: const Key('favorite_add_category'),
+                  tooltip: '新增分类',
+                  onPressed: _addCategory,
+                  icon: const Icon(Icons.add),
+                ),
+                IconButton(
+                  key: const Key('favorite_filter'),
+                  tooltip: active ? '排序与分类（已筛选）' : '排序与分类',
+                  isSelected: active,
+                  style: IconButton.styleFrom(
+                    backgroundColor: active
+                        ? colors.primaryContainer
+                        : colors.secondaryContainer,
+                    foregroundColor: active
+                        ? colors.primary
+                        : colors.onSecondaryContainer,
+                  ),
+                  onPressed: _filter,
+                  icon: const Icon(Icons.filter_list_alt),
+                  selectedIcon: const Icon(Icons.filter_list_alt),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -168,18 +204,26 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               listenable: dependencies.favorites,
               builder: (context, _) {
                 final items = dependencies.favorites.items
-                    .where((f) => selected == null || f.category == selected)
+                    .where(
+                      (f) => selected.isEmpty || selected.contains(f.category),
+                    )
                     .toList();
                 if (items.isEmpty) {
                   return ListView(
                     padding: const EdgeInsets.all(32),
-                    children: const [
-                      SizedBox(height: 48),
-                      Icon(Icons.favorite_border, size: 48),
-                      SizedBox(height: 16),
-                      Text('还没有收藏', textAlign: TextAlign.center),
-                      SizedBox(height: 8),
-                      Text('收藏帖子链接，下次可直接点按解析', textAlign: TextAlign.center),
+                    children: [
+                      const SizedBox(height: 48),
+                      const Icon(Icons.favorite_border, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        selected.isEmpty ? '还没有收藏' : '所选分类还没有收藏',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '收藏帖子链接，下次可直接点按解析',
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   );
                 }
@@ -382,6 +426,65 @@ class _FavoriteEditState extends State<_FavoriteEditDialog> {
                 }
               },
               child: const Text('保存'),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _CategoryInputDialog extends StatefulWidget {
+  const _CategoryInputDialog({required this.dependencies});
+  final AppDependencies dependencies;
+  @override
+  State<_CategoryInputDialog> createState() => _CategoryInputState();
+}
+
+class _CategoryInputState extends State<_CategoryInputDialog> {
+  final _name = TextEditingController();
+  final _form = GlobalKey<FormState>();
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.dependencies.settings,
+    builder: (context, _) {
+      final hidden = widget.dependencies.settings.value.privacyMode;
+      return AlertDialog(
+        title: Text(hidden ? '隐私模式已启动，无法查看收藏' : '新增分类'),
+        scrollable: true,
+        content: hidden
+            ? null
+            : Form(
+                key: _form,
+                child: TextFormField(
+                  key: const Key('favorite_category_name'),
+                  controller: _name,
+                  autofocus: true,
+                  maxLength: 40,
+                  decoration: const InputDecoration(labelText: '分类名称'),
+                  validator: (value) =>
+                      value == null || value.trim().isEmpty ? '请输入分类名称' : null,
+                ),
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          if (!hidden)
+            FilledButton(
+              onPressed: () {
+                if (!widget.dependencies.settings.value.privacyMode &&
+                    _form.currentState!.validate()) {
+                  Navigator.pop(context, _name.text.trim());
+                }
+              },
+              child: const Text('添加'),
             ),
         ],
       );
