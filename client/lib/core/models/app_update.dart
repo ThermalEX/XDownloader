@@ -121,23 +121,28 @@ class UpdatePreferences {
   const UpdatePreferences({
     this.channel = UpdateChannel.stable,
     this.autoCheck = true,
+    this.showUpdatePrompt = true,
     this.lastAutomaticCheckAt,
   });
   final UpdateChannel channel;
   final bool autoCheck;
+  final bool showUpdatePrompt;
   final DateTime? lastAutomaticCheckAt;
   UpdatePreferences copyWith({
     UpdateChannel? channel,
     bool? autoCheck,
+    bool? showUpdatePrompt,
     DateTime? lastAutomaticCheckAt,
   }) => UpdatePreferences(
     channel: channel ?? this.channel,
     autoCheck: autoCheck ?? this.autoCheck,
+    showUpdatePrompt: showUpdatePrompt ?? this.showUpdatePrompt,
     lastAutomaticCheckAt: lastAutomaticCheckAt ?? this.lastAutomaticCheckAt,
   );
   Map<String, Object?> toJson() => {
     'channel': channel.name,
     'autoCheck': autoCheck,
+    'showUpdatePrompt': showUpdatePrompt,
     'lastAutomaticCheckAt': lastAutomaticCheckAt?.toUtc().toIso8601String(),
   };
   factory UpdatePreferences.fromJson(Map<String, Object?> m) =>
@@ -146,6 +151,9 @@ class UpdatePreferences {
             ? UpdateChannel.stable
             : UpdateChannel.values.byName(m['channel'] as String),
         autoCheck: m['autoCheck'] == null ? true : m['autoCheck'] as bool,
+        showUpdatePrompt: m['showUpdatePrompt'] == null
+            ? true
+            : m['showUpdatePrompt'] as bool,
         lastAutomaticCheckAt: m['lastAutomaticCheckAt'] == null
             ? null
             : DateTime.parse(m['lastAutomaticCheckAt'] as String),

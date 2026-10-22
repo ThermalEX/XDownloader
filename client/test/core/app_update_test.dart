@@ -6,14 +6,17 @@ void main() {
     final defaults = UpdatePreferences.fromJson({});
     expect(defaults.channel, UpdateChannel.stable);
     expect(defaults.autoCheck, isTrue);
+    expect(defaults.showUpdatePrompt, isTrue);
     final saved = defaults.copyWith(
       channel: UpdateChannel.beta,
       autoCheck: false,
+      showUpdatePrompt: false,
       lastAutomaticCheckAt: DateTime(2026, 10, 21, 2),
     );
     final restored = UpdatePreferences.fromJson(saved.toJson());
     expect(restored.channel, UpdateChannel.beta);
     expect(restored.autoCheck, isFalse);
+    expect(restored.showUpdatePrompt, isFalse);
     expect(
       restored.lastAutomaticCheckAt!.isAtSameMomentAs(
         saved.lastAutomaticCheckAt!,

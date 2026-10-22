@@ -32,56 +32,49 @@ void main() {
   late FakeUpdateBackend backend;
   late FixtureReleaseClient client;
   late UpdateRepository repo;
-  var now = DateTime.utc(2026, 10, 21, 2);
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('xdl-updates-');
     store = UpdateTestStore(temp);
     backend = FakeUpdateBackend();
     client = FixtureReleaseClient();
-    now = DateTime.utc(2026, 10, 21, 2);
-    repo = UpdateRepository(
-      store: store,
-      releases: client,
-      backend: backend,
-      now: () => now,
-    );
+    repo = UpdateRepository(store: store, releases: client, backend: backend);
     await repo.initialize();
   });
   tearDown(() async {
     repo.dispose();
     await temp.delete(recursive: true);
   });
-  test('stable default and exactly daily automatic checks preserve unrelated settings', () async {
-    await store.write('settings', {'privacyMode': true});
-    expect(repo.preferences.channel, UpdateChannel.stable);
-    expect(repo.preferences.autoCheck, true);
-    await Future.wait([
-      repo.check(automatic: true),
-      repo.check(automatic: true),
-    ]);
-    expect(client.checks, 1);
-    now = now.add(const Duration(hours: 23));
-    await repo.check(automatic: true);
-    expect(client.checks, 1);
-    now = now.add(const Duration(hours: 1));
-    await repo.check(automatic: true);
-    expect(client.checks, 2);
-    await repo.check();
-    expect(client.checks, 3);
-    expect((await store.read('settings'))['privacyMode'], true);
-  });
-  test('failed automatic attempt is throttled and clock rollback permits one new attempt', () async {
+  test(
+    'automatic checks coalesce in flight but run again at the next startup',
+    () async {
+      await store.write('settings', {'privacyMode': true});
+      expect(repo.preferences.channel, UpdateChannel.stable);
+      expect(repo.preferences.autoCheck, true);
+      await Future.wait([
+        repo.check(automatic: true),
+        repo.check(automatic: true),
+      ]);
+      expect(client.checks, 1);
+      await repo.check(automatic: true);
+      expect(client.checks, 2);
+      await repo.check(automatic: true);
+      expect(client.checks, 3);
+      await repo.check();
+      expect(client.checks, 4);
+      expect((await store.read('settings'))['privacyMode'], true);
+    },
+  );
+  test('failed automatic checks can retry on the next startup without a daily limit', () async {
     client.respond = (_) =>
         Future.error(const AppFailure(FailureKind.network, 'offline'));
     await repo.check(automatic: true);
     expect(repo.error, isNotNull);
     await repo.check(automatic: true);
-    expect(client.checks, 1);
-    now = now.subtract(const Duration(days: 1));
-    await repo.check(automatic: true);
     expect(client.checks, 2);
     await repo.check(automatic: true);
-    expect(client.checks, 2);
+    expect(client.checks, 3);
+    await repo.check(automatic: true);
+    expect(client.checks, 4);
   });
   test('late stable reply cannot overwrite selected beta channel', () async {
     final stable = Completer<ReleaseCheck>();
@@ -103,6 +96,20 @@ void main() {
       throwsA(isA<AppFailure>()),
     );
     expect(repo.preferences.channel, UpdateChannel.stable);
+  });
+  test('reminder preference persists independently and failed writes keep the old value', () async {
+    await repo.setShowUpdatePrompt(false);
+    await repo.setChannel(UpdateChannel.beta);
+    await repo.initialize();
+    expect(repo.preferences.showUpdatePrompt, false);
+    expect(repo.preferences.autoCheck, true);
+    expect(repo.preferences.channel, UpdateChannel.beta);
+    store.fail = true;
+    await expectLater(
+      repo.setShowUpdatePrompt(true),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(repo.preferences.showUpdatePrompt, false);
   });
   test(
     'active native update blocks switching until explicitly cancelled',
@@ -178,6 +185,7 @@ void main() {
     'valid backup restores channel after current preferences are damaged',
     () async {
       await repo.setChannel(UpdateChannel.beta);
+      await repo.setShowUpdatePrompt(false);
       await repo.setAutoCheck(false);
       await repo.setAutoCheck(false);
       await File('${temp.path}/updates.json').writeAsString('damaged');
@@ -187,6 +195,7 @@ void main() {
       await repo.initialize();
       expect(repo.preferences.channel, UpdateChannel.beta);
       expect(repo.preferences.autoCheck, false);
+      expect(repo.preferences.showUpdatePrompt, false);
       expect(repo.error, isNull);
     },
   );

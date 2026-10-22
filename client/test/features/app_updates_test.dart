@@ -50,6 +50,9 @@ void main() {
         MaterialApp(home: AppUpdatesScreen(repository: f.updates)),
       );
       await tester.pumpAndSettle();
+      await reveal(tester, find.text('查看更新下载'));
+      await tester.tap(find.text('查看更新下载'));
+      await tester.pumpAndSettle();
       await reveal(tester, find.text('待安装版本：2.5.0'));
       expect(find.text('待安装版本：2.5.0'), findsOneWidget);
       await reveal(tester, find.text('继续安装'));
@@ -80,6 +83,8 @@ void main() {
       await tester.tap(find.text('下载更新'));
       await tester.pumpAndSettle();
       expect(f.updateBackend.calls, ['enqueue']);
+      await tester.tap(find.text('关闭'));
+      await tester.pumpAndSettle();
       await reveal(tester, find.byKey(const Key('update_channel_beta')));
       await tester.tap(find.byKey(const Key('update_channel_beta')));
       await tester.pumpAndSettle();
@@ -110,12 +115,19 @@ void main() {
         MaterialApp(home: AppUpdatesScreen(repository: f.updates)),
       );
       await tester.pumpAndSettle();
+      await reveal(tester, find.text('查看更新下载'));
+      await tester.tap(find.text('查看更新下载'));
+      await tester.pumpAndSettle();
       await reveal(tester, find.text('继续安装'));
       await tester.tap(find.text('继续安装'));
       await tester.pumpAndSettle();
       expect(f.updateBackend.calls, ['install:${update.candidateId}']);
-      await reveal(tester, find.text('前往发布页下载'));
-      await tester.tap(find.text('前往发布页下载'));
+      final browser = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('前往发布页下载'),
+      );
+      await reveal(tester, browser);
+      await tester.tap(browser);
       await tester.pumpAndSettle();
       expect(f.updateBackend.pages.single.host, 'github.com');
     }),
@@ -154,9 +166,14 @@ void main() {
         ),
       ]) {
         f.releaseClient.respond = (_) async => sample.$1;
-        await f.updates.check();
+        await reveal(tester, find.text('检查更新'));
+        await tester.tap(find.text('检查更新'));
         await tester.pumpAndSettle();
         expect(find.text(sample.$2), findsOneWidget);
+        expect(find.byType(AlertDialog), findsOneWidget);
+        await tester.tap(find.text('关闭'));
+        await tester.pumpAndSettle();
+        expect(find.text(sample.$2), findsNothing);
       }
     }),
   );

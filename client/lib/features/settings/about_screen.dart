@@ -4,6 +4,7 @@ import '../../app/bootstrap.dart';
 import '../../app/app_shell.dart';
 import '../../data/updates/github_release_client.dart';
 import 'settings_group.dart';
+import 'usage_guide_screen.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key, required this.dependencies});
@@ -42,6 +43,21 @@ class AboutScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          SettingsPanel(
+            child: ListTile(
+              key: const Key('usage_guide_entry'),
+              leading: const SettingsIcon(Icons.menu_book_outlined),
+              title: const Text('使用说明'),
+              subtitle: const Text('下载、收藏、播放器与更新'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const UsageGuideScreen(),
+                ),
               ),
             ),
           ),

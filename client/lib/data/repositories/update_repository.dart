@@ -14,12 +14,10 @@ class UpdateRepository extends ChangeNotifier {
     required this.store,
     required this.releases,
     required this.backend,
-    DateTime Function()? now,
-  }) : now = now ?? DateTime.now;
+  });
   final SnapshotStore store;
   final GitHubReleaseClient releases;
   final UpdateBackend backend;
-  final DateTime Function() now;
   final _queue = SerialQueue();
   UpdatePreferences _preferences = const UpdatePreferences();
   UpdatePreferences get preferences => _preferences;
@@ -76,6 +74,11 @@ class UpdateRepository extends ChangeNotifier {
     await _save(_preferences.copyWith(autoCheck: enabled));
     _notify();
   });
+  Future<void> setShowUpdatePrompt(bool enabled) => _queue.run(() async {
+    if (_disposed) return;
+    await _save(_preferences.copyWith(showUpdatePrompt: enabled));
+    _notify();
+  });
   Future<void> setChannel(UpdateChannel channel) async {
     var changed = false;
     await _queue.run(() async {
@@ -95,40 +98,30 @@ class UpdateRepository extends ChangeNotifier {
     if (changed) await check();
   }
 
-  Future<void> check({bool automatic = false}) async {
-    final allowed = await _queue.run(() async {
-      if (_disposed) return false;
-      if (automatic) {
-        if (!_preferences.autoCheck || checking) return false;
-        final current = now(), last = _preferences.lastAutomaticCheckAt;
-        if (last != null &&
-            !current.isBefore(last) &&
-            current.difference(last) < const Duration(hours: 24)) {
-          return false;
-        }
-        try {
-          await _save(_preferences.copyWith(lastAutomaticCheckAt: current));
-        } catch (e) {
-          _error = _failure(e);
-          _notify();
-          return false;
-        }
+  Future<ReleaseCheck?> check({bool automatic = false}) async {
+    final request = await _queue.run(() async {
+      if (_disposed || (automatic && (!_preferences.autoCheck || checking))) {
+        return null;
       }
-      return true;
+      final generation = ++_generation;
+      final channel = _preferences.channel;
+      releases.cancelCheck();
+      _checking = true;
+      _error = null;
+      _notify();
+      return (generation, channel);
     });
-    if (!allowed || _disposed) return;
-    final generation = ++_generation;
-    final channel = _preferences.channel;
-    releases.cancelCheck();
-    _checking = true;
-    _error = null;
-    _notify();
+    if (request == null || _disposed) return null;
+    final (generation, channel) = request;
     try {
       final info = installed ?? await backend.installedApp();
-      if (_disposed || generation != _generation) return;
+      if (_disposed || generation != _generation) return null;
       _installed = info;
       final next = await releases.check(installed: info, channel: channel);
-      if (!_disposed && generation == _generation) _result = next;
+      if (!_disposed && generation == _generation) {
+        _result = next;
+        return next;
+      }
     } catch (e) {
       if (!_disposed && generation == _generation) {
         _error = _failure(e);
@@ -140,6 +133,7 @@ class UpdateRepository extends ChangeNotifier {
         _notify();
       }
     }
+    return null;
   }
 
   Future<void> _operate(Future<void> Function() action) => _queue.run(() async {

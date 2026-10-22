@@ -42,6 +42,7 @@ client/android/gradle/wrapper/gradle-wrapper.properties
 client/android/settings.gradle.kts
 client/assets/branding/app_icon.png
 client/integration_test/app_flow_test.dart
+client/integration_test/update_prompt_test.dart
 client/integration_test/app_updates_test.dart
 client/integration_test/legacy_migration_test.dart
 client/integration_test/player_controls_test.dart
@@ -89,6 +90,7 @@ client/lib/features/home/home_controller.dart
 client/lib/features/home/home_screen.dart
 client/lib/features/home/media_result_view.dart
 client/lib/features/settings/about_screen.dart
+client/lib/features/settings/app_update_dialog.dart
 client/lib/features/settings/app_updates_screen.dart
 client/lib/features/settings/appearance_screen.dart
 client/lib/features/settings/application_settings_screen.dart
@@ -100,6 +102,7 @@ client/lib/features/settings/source_editor_screen.dart
 client/lib/features/settings/source_health_controller.dart
 client/lib/features/settings/sources_screen.dart
 client/lib/features/settings/storage_settings_screen.dart
+client/lib/features/settings/usage_guide_screen.dart
 client/lib/main.dart
 client/lib/platform/android_download_backend.dart
 client/lib/platform/android_update_backend.dart
@@ -140,6 +143,8 @@ client/test/features/source_exchange_ui_test.dart
 client/test/features/source_health_test.dart
 client/test/features/startup_theme_test.dart
 client/test/features/ui_polish_test.dart
+client/test/features/update_prompt_test.dart
+client/test/features/usage_guide_test.dart
 client/test/features/video_preview_test.dart
 client/test/fixtures/fx_two.json
 client/test/fixtures/scrape_one.html

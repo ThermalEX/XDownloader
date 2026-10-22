@@ -10,7 +10,7 @@ import '../features/home/home_screen.dart';
 import '../features/downloads/downloads_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/favorites/favorites_screen.dart';
-import '../features/settings/app_updates_screen.dart';
+import '../features/settings/app_update_dialog.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.dependencies});
@@ -32,9 +32,26 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(_listen());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        unawaited(widget.dependencies.updates.check(automatic: true));
+        unawaited(_checkAtStartup());
       }
     });
+  }
+
+  Future<void> _checkAtStartup() async {
+    final updates = widget.dependencies.updates;
+    final result = await updates.check(automatic: true);
+    if (!mounted ||
+        !updates.preferences.autoCheck ||
+        !updates.preferences.showUpdatePrompt ||
+        result?.candidate == null ||
+        !identical(result, updates.result) ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        (WidgetsBinding.instance.lifecycleState != null &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed)) {
+      return;
+    }
+    await showAppUpdateDialog(context, updates);
   }
 
   Future<void> _listen() async {
@@ -72,7 +89,6 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.dependencies.updates.refreshTransfer());
-      unawaited(widget.dependencies.updates.check(automatic: true));
       unawaited(runAction(context, widget.dependencies.downloads.reconcile));
       unawaited(runAction(context, home.onResumed));
     }
@@ -104,13 +120,9 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                 if (widget.dependencies.updates.result?.candidate != null)
                   IconButton(
                     tooltip: '发现新版本',
-                    onPressed: () => Navigator.push(
+                    onPressed: () => showAppUpdateDialog(
                       context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => AppUpdatesScreen(
-                          repository: widget.dependencies.updates,
-                        ),
-                      ),
+                      widget.dependencies.updates,
                     ),
                     icon: const Icon(Icons.system_update_outlined),
                   ),
