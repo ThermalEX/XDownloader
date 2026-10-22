@@ -116,6 +116,35 @@ class FavoriteRepository extends ChangeNotifier {
     await _save(_items, categories: [..._categories, name]);
     return true;
   });
+  Future<void> renameCategory(String previous, String input) => _queue.run(
+    () async {
+      final name = input.trim();
+      if (name.isEmpty ||
+          name.runes.length > 40 ||
+          !_categories.contains(previous)) {
+        throw const AppFailure(FailureKind.malformed, '分类名称需为1–40字，原分类必须存在');
+      }
+      if (name == previous) return;
+      if (_categories.contains(name)) {
+        throw const AppFailure(FailureKind.malformed, '该分类已存在');
+      }
+      await _save(
+        _items
+            .map((f) => f.category == previous ? f.copyWith(category: name) : f)
+            .toList(),
+        categories: _categories.map((c) => c == previous ? name : c).toList(),
+      );
+    },
+  );
+  Future<void> deleteCategory(String name) => _queue.run(() async {
+    if (!_categories.contains(name)) return;
+    await _save(
+      _items
+          .map((f) => f.category == name ? f.copyWith(category: '') : f)
+          .toList(),
+      categories: _categories.where((c) => c != name).toList(),
+    );
+  });
   Future<void> update(
     String postId, {
     required String title,
@@ -189,6 +218,49 @@ class FavoriteRepository extends ChangeNotifier {
         : next >= 0
         ? next
         : removed.position.clamp(0, _items.length);
-    await _save([..._items]..insert(position, removed.item));
+    final category = _categories.contains(removed.item.category)
+        ? removed.item.category
+        : '';
+    await _save(
+      [..._items]..insert(position, removed.item.copyWith(category: category)),
+    );
   });
+  Future<List<FavoriteRemoval>> removeManyForUndo(Set<String> ids) =>
+      _queue.run(() async {
+        final removed = <FavoriteRemoval>[];
+        for (var i = 0; i < _items.length; i++) {
+          if (!ids.contains(_items[i].postId)) continue;
+          removed.add(
+            FavoriteRemoval._(
+              _items[i],
+              i,
+              i > 0 ? _items[i - 1].postId : null,
+              i + 1 < _items.length ? _items[i + 1].postId : null,
+            ),
+          );
+        }
+        if (removed.isNotEmpty) {
+          await _save(_items.where((f) => !ids.contains(f.postId)).toList());
+        }
+        return removed;
+      });
+  Future<void> restoreMany(List<FavoriteRemoval> removed) =>
+      _queue.run(() async {
+        final next = [..._items];
+        for (final entry in removed.reversed) {
+          if (next.any((f) => f.postId == entry.item.postId)) continue;
+          final previous = next.indexWhere((f) => f.postId == entry.previousId);
+          final following = next.indexWhere((f) => f.postId == entry.nextId);
+          final at = previous >= 0
+              ? previous + 1
+              : following >= 0
+              ? following
+              : entry.position.clamp(0, next.length);
+          final category = _categories.contains(entry.item.category)
+              ? entry.item.category
+              : '';
+          next.insert(at, entry.item.copyWith(category: category));
+        }
+        await _save(next);
+      });
 }

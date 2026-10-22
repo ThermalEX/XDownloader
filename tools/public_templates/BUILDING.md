@@ -26,6 +26,8 @@ Native update tests additionally need generated probe-only APK fixtures. Run `py
 
 The update protocol uses `update.json` and `SHA256SUMS.txt` attached to each GitHub Release. Build both APKs with the same version and signing certificate, then use `tools/make_update_manifest.py --help` to generate matching metadata. Stable releases must not be marked prerelease; Beta tags use `vX.Y.Z-beta.N` and GitHub prerelease. All channels share a strictly increasing Android versionCode.
 
+Update `client/assets/CHANGELOG.md` with each release so the offline changelog matches the installed version. It shares the themed Markdown renderer with downloaded release notes; embedded images are not loaded. Keep the changelog in the reviewed public-file inventory when exporting sources.
+
 ## App icon
 
 The transparent source is `client/assets/branding/app_icon.png`. From `client/`, run `dart run flutter_launcher_icons` to regenerate the Android launcher and adaptive foreground densities using the pinned development tool. Keep artwork alpha, the white adaptive background and the configured inset; this tool is not an application runtime dependency.

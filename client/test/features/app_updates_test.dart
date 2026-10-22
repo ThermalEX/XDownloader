@@ -124,7 +124,7 @@ void main() {
       expect(f.updateBackend.calls, ['install:${update.candidateId}']);
       final browser = find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.text('前往发布页下载'),
+        matching: find.byKey(const Key('update_dialog_release_page')),
       );
       await reveal(tester, browser);
       await tester.tap(browser);

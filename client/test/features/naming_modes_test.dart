@@ -67,6 +67,9 @@ void main() {
   testWidgets(
     'naming choices persist and preserve the alternate rule',
     (tester) => withAppFixture(tester, (fixture) async {
+      await fixture.settings.edit(
+        (s) => s.copyWith(fileNameTemplate: '{title}'),
+      );
       await tester.pumpWidget(
         XDownloaderApp(dependencies: fixture.dependencies),
       );
@@ -81,12 +84,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<TextField>(find.byKey(const Key('filename_template')))
-            .enabled,
-        isFalse,
+            .widget<ActionChip>(find.byKey(const Key('naming_add_title')))
+            .onPressed,
+        isNull,
       );
       expect(
-        find.widgetWithText(RadioListTile<bool>, '示例视频.mp4'),
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (w) => w is RadioListTile<bool> && w.value,
+          ),
+          matching: find.text('示例视频.mp4'),
+        ),
         findsOneWidget,
       );
       await tester.scrollUntilVisible(
@@ -106,10 +114,17 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('自定义规则'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('filename_template')),
-        '{title}_{date}_{time}',
-      );
+      for (final name in ['date', 'time']) {
+        final add = find.byKey(Key('naming_add_$name'));
+        await tester.scrollUntilVisible(
+          add,
+          180,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(add);
+        await tester.pumpAndSettle();
+      }
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('保存'),

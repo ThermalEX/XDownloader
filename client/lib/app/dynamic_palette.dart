@@ -6,14 +6,36 @@ class DynamicPalette {
   final ColorScheme? light, dark;
 }
 
+ColorScheme dynamicSurfaces(ColorScheme scheme, Color Function(int) neutral) {
+  final dark = scheme.brightness == Brightness.dark;
+  // The legacy OS surface uses tone10 in dark mode, colliding with modern
+  // surfaceContainerLow. Resolve all surface roles from the same OS palette.
+  return scheme.copyWith(
+    surface: neutral(dark ? 6 : 98),
+    surfaceDim: neutral(dark ? 6 : 87),
+    surfaceBright: neutral(dark ? 24 : 98),
+    surfaceContainerLowest: neutral(dark ? 4 : 100),
+    surfaceContainerLow: neutral(dark ? 10 : 96),
+    surfaceContainer: neutral(dark ? 12 : 94),
+    surfaceContainerHigh: neutral(dark ? 17 : 92),
+    surfaceContainerHighest: neutral(dark ? 22 : 90),
+  );
+}
+
 Future<DynamicPalette> loadDynamicPalette() async {
   Future<DynamicPalette> read() async {
     try {
       final core = await DynamicColorPlugin.getCorePalette();
       if (core != null) {
         return DynamicPalette(
-          light: core.toColorScheme(),
-          dark: core.toColorScheme(brightness: Brightness.dark),
+          light: dynamicSurfaces(
+            core.toColorScheme(),
+            (tone) => Color(core.neutral.get(tone)),
+          ),
+          dark: dynamicSurfaces(
+            core.toColorScheme(brightness: Brightness.dark),
+            (tone) => Color(core.neutral.get(tone)),
+          ),
         );
       }
     } catch (_) {

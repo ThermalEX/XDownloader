@@ -87,6 +87,16 @@ class PublicExportTest(unittest.TestCase):
         self.commit()
         target = self.export()
         for name in paths: self.assertEqual((target / name).read_bytes(), png)
+    def test_reviewed_changelog_asset_is_exported_without_allowing_other_assets(self):
+        name = 'client/assets/CHANGELOG.md'
+        self.write(name, '# Version\n\n- Change\n')
+        with (self.source / 'tools/public_files.txt').open('a', encoding='utf-8') as stream:
+            stream.write(name + '\n')
+        self.commit()
+        target = self.export()
+        self.assertEqual((target / name).read_text(encoding='utf-8'), '# Version\n\n- Change\n')
+        self.assertFalse(exporter.allowed('client/assets/private.md'))
+        self.assertFalse(exporter.allowed('client/assets/session.png'))
     def test_export_retains_all_source_apks_byte_for_byte(self):
         self.write('releases/old.apk', 'preserve bytes')
         self.commit()

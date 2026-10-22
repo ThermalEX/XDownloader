@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_shell.dart';
 import '../../core/models/app_update.dart';
 import '../../data/repositories/update_repository.dart';
+import 'release_notes.dart';
 
 Future<void> showAppUpdateDialog(
   BuildContext context,
@@ -78,6 +79,10 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
       final busy = _starting || repo.checking;
       final candidate = busy ? null : repo.result?.candidate;
       return AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        titlePadding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+        constraints: const BoxConstraints(maxWidth: 560),
         scrollable: true,
         title: Text(
           candidate == null ? '应用更新' : '发现新版本 ${candidate.versionName}',
@@ -92,23 +97,18 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
                 const SizedBox(height: 16),
                 const Text('正在检查更新…'),
               ] else if (candidate != null) ...[
-                Text(candidate.notes.isEmpty ? '此版本未提供更新说明' : candidate.notes),
+                ReleaseNotes(
+                  data: candidate.notes.isEmpty
+                      ? '此版本未提供更新说明'
+                      : candidate.notes,
+                  onOpenLink: (uri) => repo.openPage(uri),
+                ),
                 const SizedBox(height: 12),
                 Text('安装包 ${_size(candidate.assets.first.bytes)}'),
                 if (repo.result?.scopeComplete == false) ...[
                   const SizedBox(height: 12),
                   Text(_resultMessage()),
                 ],
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('不再提醒'),
-                  value: !repo.preferences.showUpdatePrompt,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (value) => runAction(
-                    context,
-                    () => repo.setShowUpdatePrompt(!(value ?? false)),
-                  ),
-                ),
               ] else
                 Text(_resultMessage()),
               if (repo.transfer.phase != UpdatePhase.idle) ...[
@@ -121,13 +121,54 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               if (!busy)
-                TextButton.icon(
-                  onPressed: () => runAction(
-                    context,
-                    () => repo.openPage(candidate?.releasePage),
-                  ),
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('前往发布页下载'),
+                Builder(
+                  builder: (context) {
+                    final compact =
+                        MediaQuery.sizeOf(context).width -
+                            MediaQuery.paddingOf(context).horizontal -
+                            72 <
+                        260;
+                    final scale =
+                        MediaQuery.textScalerOf(context).scale(14) / 14;
+                    final label = compact || scale > 1.3 ? '发布页' : '前往发布页';
+                    final browser = TextButton.icon(
+                      key: const Key('update_dialog_release_page'),
+                      onPressed: () => runAction(
+                        context,
+                        () => repo.openPage(candidate?.releasePage),
+                      ),
+                      icon: const Icon(Icons.open_in_new),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                      label: Text(label),
+                    );
+                    if (candidate == null) return browser;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            dense: true,
+                            title: Text(
+                              '不再提醒',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            value: !repo.preferences.showUpdatePrompt,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            onChanged: (value) => runAction(
+                              context,
+                              () => repo.setShowUpdatePrompt(!(value ?? false)),
+                            ),
+                          ),
+                        ),
+                        Flexible(
+                          child: Tooltip(message: '前往发布页下载', child: browser),
+                        ),
+                      ],
+                    );
+                  },
                 ),
             ],
           ),

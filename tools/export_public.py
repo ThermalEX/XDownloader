@@ -14,7 +14,7 @@ TEMPLATES = {
 }
 ROOT_FILES = {'client/.gitignore', 'client/.metadata', 'client/analysis_options.yaml',
               'client/pubspec.yaml', 'client/pubspec.lock', 'client/AGENTS.md',
-              'client/assets/branding/app_icon.png'}
+              'client/assets/branding/app_icon.png', 'client/assets/CHANGELOG.md'}
 ICON_FOREGROUNDS = {'client/android/app/src/main/res/drawable-' + density + '/ic_launcher_foreground.png'
                     for density in ('mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi')}
 PREFIXES = ('client/lib/', 'client/test/', 'client/integration_test/', 'client/tool/', 'client/android/')

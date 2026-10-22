@@ -40,6 +40,8 @@ void main() {
         ),
         findsOneWidget,
       );
+      await tester.drag(find.byType(SnackBar), const Offset(0, 160));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('清空'));
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('从剪贴板粘贴'), findsOneWidget);

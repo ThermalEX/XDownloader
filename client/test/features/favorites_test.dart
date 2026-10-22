@@ -159,6 +159,8 @@ void main() {
       expect(fixture.favorites.items.single.postId, '123456');
       await tester.tap(find.byKey(const Key('nav_favorites')));
       await tester.pumpAndSettle();
+      await tester.drag(find.byType(SnackBar), const Offset(0, 160));
+      await tester.pumpAndSettle();
       fixture.clipboard = '分享 https://twitter.com/b/status/234567?s=20';
       await tester.tap(find.text('从剪贴板添加'));
       await tester.pumpAndSettle();

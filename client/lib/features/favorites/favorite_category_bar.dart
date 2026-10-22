@@ -12,10 +12,12 @@ class FavoriteCategoryBar extends StatefulWidget {
     required this.categories,
     required this.selected,
     required this.onSelected,
+    this.onManage,
   });
   final List<String> categories;
   final Set<String> selected;
   final ValueChanged<String?> onSelected;
+  final ValueChanged<String>? onManage;
   @override
   State<FavoriteCategoryBar> createState() => _CategoryBarState();
 }
@@ -66,20 +68,29 @@ class _CategoryBarState extends State<FavoriteCategoryBar> {
                   ...widget.categories,
                 ])
                   Padding(
+                    key: ValueKey(category),
                     padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      key: category == null
-                          ? const Key('favorite_category_all')
-                          : Key('favorite_category:$category'),
-                      label: Text(
-                        category == null ? '全部' : categoryLabel(category),
+                    child: GestureDetector(
+                      onLongPress:
+                          category == null ||
+                              category.isEmpty ||
+                              widget.onManage == null
+                          ? null
+                          : () => widget.onManage!(category),
+                      child: FilterChip(
+                        key: category == null
+                            ? const Key('favorite_category_all')
+                            : Key('favorite_category:$category'),
+                        label: Text(
+                          category == null ? '全部' : categoryLabel(category),
+                        ),
+                        selected: category == null
+                            ? widget.selected.isEmpty
+                            : widget.selected.contains(category),
+                        showCheckmark: false,
+                        materialTapTargetSize: MaterialTapTargetSize.padded,
+                        onSelected: (_) => widget.onSelected(category),
                       ),
-                      selected: category == null
-                          ? widget.selected.isEmpty
-                          : widget.selected.contains(category),
-                      showCheckmark: false,
-                      materialTapTargetSize: MaterialTapTargetSize.padded,
-                      onSelected: (_) => widget.onSelected(category),
                     ),
                   ),
               ],

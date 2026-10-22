@@ -5,6 +5,7 @@ import '../../app/app_shell.dart';
 import '../../data/updates/github_release_client.dart';
 import 'settings_group.dart';
 import 'usage_guide_screen.dart';
+import 'changelog_screen.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key, required this.dependencies, this.onOpenTab});
@@ -61,6 +62,21 @@ class AboutScreen extends StatelessWidget {
                     dependencies: dependencies,
                     onOpenTab: onOpenTab,
                   ),
+                ),
+              ),
+            ),
+          ),
+          SettingsPanel(
+            child: ListTile(
+              key: const Key('changelog_entry'),
+              leading: const SettingsIcon(Icons.history_outlined),
+              title: const Text('更新日志'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      ChangelogScreen(updates: dependencies.updates),
                 ),
               ),
             ),

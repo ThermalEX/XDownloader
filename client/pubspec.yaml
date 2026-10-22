@@ -1,7 +1,7 @@
 name: xdownloader
 description: X video downloader with Flutter Material 3.
 publish_to: none
-version: 2.10.0+20
+version: 2.11.0+21
 
 environment:
   sdk: ^3.13.5
@@ -16,6 +16,7 @@ dependencies:
   dynamic_color: 1.9.0
   video_player: 2.14.1
   chewie: 1.17.2
+  flutter_markdown_plus: 1.0.12
 
 dev_dependencies:
   flutter_test:
@@ -31,6 +32,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/app_icon.png
+    - assets/CHANGELOG.md
 
 flutter_launcher_icons:
   android: true

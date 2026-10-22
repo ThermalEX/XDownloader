@@ -61,6 +61,144 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen> {
   AppDependencies get dependencies => widget.dependencies;
   Set<String> _categories = {};
+  final _selectedIds = <String>{};
+  bool _removing = false;
+  void _select(String id) {
+    if (dependencies.settings.value.privacyMode || _removing) return;
+    setState(() {
+      _selectedIds.retainAll(dependencies.favorites.items.map((f) => f.postId));
+      if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    });
+  }
+
+  Future<void> _batchRemove(Set<String> ids) => runAction(context, () async {
+    _ensureVisible(dependencies);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text('删除 ${ids.length} 项收藏？'),
+        content: const Text('只取消所选收藏，不删除已下载的视频。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('删除收藏'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _ensureVisible(dependencies);
+    setState(() => _removing = true);
+    try {
+      final removed = await dependencies.favorites.removeManyForUndo(ids);
+      if (!mounted) return;
+      setState(_selectedIds.clear);
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已删除 ${removed.length} 项收藏'),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: '撤回',
+            onPressed: () => runAction(context, () async {
+              _ensureVisible(dependencies);
+              await dependencies.favorites.restoreMany(removed);
+            }),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _removing = false);
+    }
+  });
+  Future<void> _manageCategory(String category) => runAction(context, () async {
+    _ensureVisible(dependencies);
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => ListenableBuilder(
+        listenable: dependencies.settings,
+        builder: (_, _) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (dependencies.settings.value.privacyMode)
+                const ListTile(title: Text('隐私模式已启动，无法查看收藏'))
+              else ...[
+                ListTile(
+                  title: Text(
+                    categoryLabel(category),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('编辑名称'),
+                  onTap: () => Navigator.pop(sheet, 'rename'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('删除分类'),
+                  onTap: () => Navigator.pop(sheet, 'delete'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    _ensureVisible(dependencies);
+    if (action == 'rename') {
+      final name = await showDialog<String>(
+        context: context,
+        builder: (_) => _CategoryInputDialog(
+          dependencies: dependencies,
+          initialName: category,
+        ),
+      );
+      if (name == null || !mounted) return;
+      _ensureVisible(dependencies);
+      await dependencies.favorites.renameCategory(category, name);
+      if (!mounted) return;
+      setState(() {
+        if (_categories.remove(category)) _categories.add(name.trim());
+        _selectedIds.clear();
+      });
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('删除分类？'),
+          content: const Text('其中的收藏将移到“未分类”，不会删除链接。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('删除分类'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      _ensureVisible(dependencies);
+      await dependencies.favorites.deleteCategory(category);
+      if (!mounted) return;
+      setState(() {
+        _categories.remove(category);
+        _selectedIds.clear();
+      });
+    }
+  });
   Future<void> _filter() => runAction(context, () async {
     _ensureVisible(dependencies);
     final choice = await showModalBottomSheet<(FavoriteSort, Set<String>)>(
@@ -82,7 +220,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     await dependencies.favorites.setSort(choice.$1);
     if (mounted) {
       _ensureVisible(dependencies);
-      setState(() => _categories = choice.$2);
+      setState(() {
+        _categories = choice.$2;
+        _selectedIds.clear();
+      });
     }
   });
 
@@ -154,6 +295,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           dependencies.favorites.sort != FavoriteSort.defaultOrder ||
           selected.isNotEmpty;
       final colors = Theme.of(context).colorScheme;
+      final visible = dependencies.favorites.items
+          .where((f) => selected.isEmpty || selected.contains(f.category))
+          .toList();
+      final chosen = visible
+          .where((f) => _selectedIds.contains(f.postId))
+          .map((f) => f.postId)
+          .toSet();
+      final selecting = chosen.isNotEmpty;
       return Column(
         children: [
           Padding(
@@ -164,12 +313,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   child: FavoriteCategoryBar(
                     categories: dependencies.favorites.categories,
                     selected: selected,
+                    onManage: _manageCategory,
                     onSelected: (category) {
                       if (!dependencies.settings.value.privacyMode) {
-                        setState(
-                          () =>
-                              _categories = category == null ? {} : {category},
-                        );
+                        setState(() {
+                          _categories = category == null ? {} : {category};
+                          _selectedIds.clear();
+                        });
                       }
                     },
                   ),
@@ -199,6 +349,47 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               ],
             ),
           ),
+          if (selecting)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Material(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: '退出多选',
+                        onPressed: _removing
+                            ? null
+                            : () => setState(_selectedIds.clear),
+                        icon: const Icon(Icons.close),
+                      ),
+                      Expanded(child: Text('已选 ${chosen.length} 项')),
+                      TextButton(
+                        onPressed: _removing
+                            ? null
+                            : () => setState(
+                                () => _selectedIds.addAll(
+                                  visible.map((f) => f.postId),
+                                ),
+                              ),
+                        child: const Text('全选'),
+                      ),
+                      IconButton(
+                        key: const Key('favorite_delete_selected'),
+                        tooltip: '删除收藏',
+                        onPressed: _removing
+                            ? null
+                            : () => _batchRemove(chosen),
+                        icon: Icon(Icons.delete_outline, color: colors.error),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: ListenableBuilder(
               listenable: dependencies.favorites,
@@ -233,17 +424,27 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   itemBuilder: (context, index) {
                     final item = items[index];
                     return Card.filled(
+                      color: chosen.contains(item.postId)
+                          ? colors.secondaryContainer
+                          : null,
                       child: ListTile(
                         key: Key('favorite_${item.postId}'),
-                        leading: IconButton(
-                          key: Key('favorite_remove_${item.postId}'),
-                          tooltip: '取消收藏',
-                          onPressed: () => _remove(item.postId),
-                          icon: Icon(
-                            Icons.favorite,
-                            color: savedHeartColor(context),
-                          ),
-                        ),
+                        selected: chosen.contains(item.postId),
+                        onLongPress: () => _select(item.postId),
+                        leading: selecting
+                            ? Checkbox(
+                                value: chosen.contains(item.postId),
+                                onChanged: (_) => _select(item.postId),
+                              )
+                            : IconButton(
+                                key: Key('favorite_remove_${item.postId}'),
+                                tooltip: '取消收藏',
+                                onPressed: () => _remove(item.postId),
+                                icon: Icon(
+                                  Icons.favorite,
+                                  color: savedHeartColor(context),
+                                ),
+                              ),
                         title: Text(
                           item.title.isEmpty
                               ? 'X 帖子 ${item.postId}'
@@ -256,46 +457,71 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        onTap: () => runAction(context, () async {
-                          _ensureVisible(dependencies);
-                          widget.onOpen(item.url.toString());
-                        }),
-                        trailing: PopupMenuButton<String>(
-                          key: Key('favorite_actions_${item.postId}'),
-                          tooltip: '收藏操作',
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          onSelected: (action) => runAction(context, () async {
-                            _ensureVisible(dependencies);
-                            if (action == 'rename' || action == 'category') {
-                              await _editFavorite(
-                                context,
-                                dependencies,
-                                item,
-                                category: action == 'category',
-                              );
-                            } else if (action == 'copy') {
-                              await Clipboard.setData(
-                                ClipboardData(text: item.url.toString()),
-                              );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('已复制链接')),
-                                );
-                              }
-                            } else {
-                              await _remove(item.postId);
-                            }
-                          }),
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'rename', child: Text('重命名')),
-                            PopupMenuItem(value: 'category', child: Text('分类')),
-                            PopupMenuItem(value: 'copy', child: Text('复制链接')),
-                            PopupMenuItem(value: 'remove', child: Text('取消收藏')),
-                          ],
-                        ),
+                        onTap: selecting
+                            ? () => _select(item.postId)
+                            : () => runAction(context, () async {
+                                _ensureVisible(dependencies);
+                                widget.onOpen(item.url.toString());
+                              }),
+                        trailing: selecting
+                            ? null
+                            : PopupMenuButton<String>(
+                                key: Key('favorite_actions_${item.postId}'),
+                                tooltip: '收藏操作',
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(20),
+                                  ),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                onSelected: (action) =>
+                                    runAction(context, () async {
+                                      _ensureVisible(dependencies);
+                                      if (action == 'rename' ||
+                                          action == 'category') {
+                                        await _editFavorite(
+                                          context,
+                                          dependencies,
+                                          item,
+                                          category: action == 'category',
+                                        );
+                                      } else if (action == 'copy') {
+                                        await Clipboard.setData(
+                                          ClipboardData(
+                                            text: item.url.toString(),
+                                          ),
+                                        );
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('已复制链接'),
+                                                ),
+                                              );
+                                        }
+                                      } else {
+                                        await _remove(item.postId);
+                                      }
+                                    }),
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'rename',
+                                    child: Text('重命名'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'category',
+                                    child: Text('分类'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'copy',
+                                    child: Text('复制链接'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'remove',
+                                    child: Text('取消收藏'),
+                                  ),
+                                ],
+                              ),
                       ),
                     );
                   },
@@ -434,15 +660,21 @@ class _FavoriteEditState extends State<_FavoriteEditDialog> {
 }
 
 class _CategoryInputDialog extends StatefulWidget {
-  const _CategoryInputDialog({required this.dependencies});
+  const _CategoryInputDialog({required this.dependencies, this.initialName});
   final AppDependencies dependencies;
+  final String? initialName;
   @override
   State<_CategoryInputDialog> createState() => _CategoryInputState();
 }
 
 class _CategoryInputState extends State<_CategoryInputDialog> {
-  final _name = TextEditingController();
+  late final _name = TextEditingController(text: widget.initialName ?? '');
   final _form = GlobalKey<FormState>();
+  void _close([String? value]) {
+    FocusScope.of(context).unfocus();
+    Navigator.pop(context, value);
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -455,7 +687,13 @@ class _CategoryInputState extends State<_CategoryInputDialog> {
     builder: (context, _) {
       final hidden = widget.dependencies.settings.value.privacyMode;
       return AlertDialog(
-        title: Text(hidden ? '隐私模式已启动，无法查看收藏' : '新增分类'),
+        title: Text(
+          hidden
+              ? '隐私模式已启动，无法查看收藏'
+              : widget.initialName == null
+              ? '新增分类'
+              : '编辑分类',
+        ),
         scrollable: true,
         content: hidden
             ? null
@@ -472,19 +710,16 @@ class _CategoryInputState extends State<_CategoryInputDialog> {
                 ),
               ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
+          TextButton(onPressed: _close, child: const Text('取消')),
           if (!hidden)
             FilledButton(
               onPressed: () {
                 if (!widget.dependencies.settings.value.privacyMode &&
                     _form.currentState!.validate()) {
-                  Navigator.pop(context, _name.text.trim());
+                  _close(_name.text.trim());
                 }
               },
-              child: const Text('添加'),
+              child: Text(widget.initialName == null ? '添加' : '保存'),
             ),
         ],
       );

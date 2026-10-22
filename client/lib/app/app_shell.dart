@@ -143,65 +143,73 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                     MediaQuery.viewInsetsOf(context).bottom <
                 240,
         bottom: false,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: PageView(
-              controller: _pages,
-              onPageChanged: (value) {
-                FocusManager.instance.primaryFocus?.unfocus();
-                setState(() => index = value);
-                home.setVisible(value == 0);
-              },
-              children: [
-                _PersistentPage(child: HomeScreen(controller: home)),
-                _PersistentPage(
-                  child: DownloadsScreen(
-                    repository: widget.dependencies.downloads,
-                    favorites: widget.dependencies.favorites,
-                    settings: widget.dependencies.settings,
-                    onParse: _share,
-                  ),
-                ),
-                _PersistentPage(
-                  child: FavoritesScreen(
-                    dependencies: widget.dependencies,
-                    onOpen: _share,
-                  ),
-                ),
-                _PersistentPage(
-                  child: SettingsScreen(
-                    dependencies: widget.dependencies,
-                    onOpenTab: _openTab,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Align(
+        child: Column(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 760),
-                  child: switch (index) {
-                    0 => HomeComposer(controller: home),
-                    2 => FavoritesActions(dependencies: widget.dependencies),
-                    _ => const SizedBox.shrink(),
-                  },
+                  child: PageView(
+                    controller: _pages,
+                    onPageChanged: (value) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() => index = value);
+                      home.setVisible(value == 0);
+                    },
+                    children: [
+                      _PersistentPage(child: HomeScreen(controller: home)),
+                      _PersistentPage(
+                        child: DownloadsScreen(
+                          repository: widget.dependencies.downloads,
+                          favorites: widget.dependencies.favorites,
+                          settings: widget.dependencies.settings,
+                          onParse: _share,
+                        ),
+                      ),
+                      _PersistentPage(
+                        child: FavoritesScreen(
+                          dependencies: widget.dependencies,
+                          onOpen: _share,
+                        ),
+                      ),
+                      _PersistentPage(
+                        child: SettingsScreen(
+                          dependencies: widget.dependencies,
+                          onOpenTab: _openTab,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              if (MediaQuery.viewInsetsOf(context).bottom == 0)
-                Theme(
+            ),
+            Align(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: switch (index) {
+                  0 => HomeComposer(controller: home),
+                  2 => FavoritesActions(dependencies: widget.dependencies),
+                  _ => const SizedBox.shrink(),
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        bottom: MediaQuery.viewInsetsOf(context).bottom == 0,
+        child: AnimatedSize(
+          key: const Key('root_navigation_transition'),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.bottomCenter,
+          child: MediaQuery.viewInsetsOf(context).bottom > 0
+              ? const SizedBox(width: double.infinity, height: 0)
+              : Theme(
                   data: Theme.of(context)
                       .copyWith(splashFactory: NoSplash.splashFactory),
                   child: NavigationBar(
@@ -246,8 +254,6 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-            ],
-          ),
         ),
       ),
     ),
