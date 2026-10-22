@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,61 @@ import '../test/support/app_fixture.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  for (final categoryCount in [0, 8]) {
+    testWidgets(
+      'category bar stays interactive before page settles ($categoryCount)',
+      (tester) => withAppFixture(tester, (f) async {
+        for (var i = 0; i < categoryCount; i++) {
+          await f.favorites.addCategory('分类 $i');
+        }
+        await f.settings.edit((s) => s.copyWith(themeMode: AppThemeMode.dark));
+        await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('nav_downloads')));
+        await tester.pumpAndSettle();
+        final pager = find.byType(PageView);
+        final pages = tester.widget<PageView>(pager).controller!;
+        unawaited(
+          pages.animateToPage(
+            2,
+            duration: const Duration(seconds: 1),
+            curve: Curves.linear,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 750));
+        expect(pages.page, greaterThan(1.5));
+        expect(pages.page, lessThan(2));
+        final bar = find.byType(FavoriteCategoryBar);
+        final visible = tester.getRect(bar).intersect(tester.getRect(pager));
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(of: bar, matching: find.byType(Scrollable)),
+            )
+            .position;
+        final gesture = await tester.startGesture(visible.center);
+        await gesture.moveBy(const Offset(-200, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+        await gesture.moveBy(const Offset(-200, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(pages.page, 2);
+        if (categoryCount > 0) expect(position.pixels, greaterThan(0));
+        await binding.convertFlutterSurfaceToImage();
+        await tester.pumpAndSettle();
+        await File(
+          '${Directory.systemTemp.path}/xdl_probe_category_gesture_$categoryCount.png',
+        ).writeAsBytes(
+          await binding.takeScreenshot('category-gesture-$categoryCount'),
+        );
+        await tester.drag(pager, Offset(-tester.getSize(pager).width * .8, 0));
+        await tester.pumpAndSettle();
+        expect(pages.page, 3);
+        expect(tester.takeException(), isNull);
+      }),
+    );
+  }
   testWidgets(
     'download favorite and category navigation on isolated probe UI',
     (tester) => withAppFixture(tester, (f) async {

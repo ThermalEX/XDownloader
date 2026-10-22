@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xdownloader/app/app.dart';
@@ -7,6 +9,61 @@ import 'package:xdownloader/features/favorites/favorite_category_bar.dart';
 import '../support/app_fixture.dart';
 
 void main() {
+  for (final categoryCount in [0, 8]) {
+    for (final animated in [true, false]) {
+      testWidgets(
+        'category drag owns its gesture during page settling with $categoryCount categories animated=$animated',
+        (tester) => withAppFixture(tester, (f) async {
+          for (var i = 0; i < categoryCount; i++) {
+            await f.favorites.addCategory('分类 $i');
+          }
+          await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('nav_downloads')));
+          await tester.pumpAndSettle();
+          final pager = find.byType(PageView);
+          final pages = tester.widget<PageView>(pager).controller!;
+          if (animated) {
+            unawaited(
+              pages.animateToPage(
+                2,
+                duration: const Duration(seconds: 1),
+                curve: Curves.linear,
+              ),
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 750));
+          } else {
+            await tester.fling(
+              pager,
+              Offset(-tester.getSize(pager).width * .65, 0),
+              600,
+            );
+            await tester.pump(const Duration(milliseconds: 16));
+          }
+          expect(pages.page, greaterThan(1.5));
+          expect(pages.page, lessThan(2));
+          final bar = find.byType(FavoriteCategoryBar);
+          final visible = tester.getRect(bar).intersect(tester.getRect(pager));
+          final scroll = tester
+              .state<ScrollableState>(
+                find.descendant(of: bar, matching: find.byType(Scrollable)),
+              )
+              .position;
+          final gesture = await tester.startGesture(visible.center);
+          await gesture.moveBy(const Offset(-400, 0));
+          await tester.pump(const Duration(milliseconds: 16));
+          await gesture.moveBy(const Offset(-350, 0));
+          await tester.pump(const Duration(milliseconds: 16));
+          await gesture.up();
+          await tester.pumpAndSettle();
+          expect(pages.page, 2);
+          if (categoryCount > 0) expect(scroll.pixels, greaterThan(0));
+          expect(tester.takeException(), isNull);
+        }),
+      );
+    }
+  }
   testWidgets(
     'category overflow fades, scrolls independently and stays usable at 320dp with large text',
     (tester) => withAppFixture(tester, (f) async {

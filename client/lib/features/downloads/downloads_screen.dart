@@ -5,6 +5,7 @@ import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../core/models/app_failure.dart';
 import '../../app/app_shell.dart';
+import '../../app/library_search.dart';
 import '../../core/models/download.dart';
 import 'download_tile.dart';
 import 'video_preview_screen.dart';
@@ -30,6 +31,32 @@ class DownloadsScreen extends StatefulWidget {
 
 class _DownloadsScreenState extends State<DownloadsScreen> {
   DownloadRepository get repository => widget.repository;
+  late final _search = LibrarySearch(
+    widget.settings,
+    onChanged: _selected.clear,
+  );
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<DownloadRecord> get _visible {
+    if (_search.isEmpty) return repository.records;
+    final originalLinks = {
+      for (final entry in repository.history) entry.taskId: entry.postUrl,
+    };
+    return repository.records
+        .where(
+          (record) => _search.matches([
+            record.request.displayName,
+            record.request.postUrl,
+            originalLinks[record.taskId],
+          ]),
+        )
+        .toList();
+  }
+
   final _selected = <String>{};
   bool _busy = false;
   bool get _private => widget.settings.value.privacyMode;
@@ -280,7 +307,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       ? null
                       : () => setState(() {
                           _selected.addAll(
-                            repository.records
+                            _visible
                                 .where((r) => r.phase.terminal)
                                 .map((r) => r.taskId),
                           );
@@ -402,14 +429,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([repository, widget.settings]),
+    listenable: Listenable.merge([repository, widget.settings, _search]),
     builder: (context, _) {
-      final selected = repository.records
+      final visible = _visible;
+      final selected = visible
           .where((r) => r.phase.terminal && _selected.contains(r.taskId))
           .toList();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (!_private) LibrarySearchField(search: _search, name: 'downloads'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
@@ -440,44 +469,50 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: repository.reconcile,
-              child: ListView(
+              child: ListView.builder(
                 padding: const EdgeInsets.all(20),
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  if (repository.storageFailure != null)
-                    Text(repository.storageFailure!.message),
-                  if (repository.records.isEmpty)
-                    const Padding(
+                itemCount: 1 + (visible.isEmpty ? 1 : visible.length),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return repository.storageFailure == null
+                        ? const SizedBox.shrink()
+                        : Text(repository.storageFailure!.message);
+                  }
+                  if (visible.isEmpty) {
+                    return Padding(
                       padding: EdgeInsets.symmetric(vertical: 80),
                       child: Column(
                         children: [
                           Icon(Icons.download_outlined, size: 48),
                           SizedBox(height: 16),
-                          Text('还没有下载记录'),
+                          Text(_search.isEmpty ? '还没有下载记录' : '没有匹配的结果'),
                           SizedBox(height: 8),
                           Text('解析链接后，点选清晰度开始下载'),
                         ],
                       ),
+                    );
+                  }
+                  final record = visible[index - 1];
+                  return DownloadTile(
+                    key: ValueKey(record.taskId),
+                    privacyMode: _private,
+                    record: record,
+                    loadThumbnail: () => repository.thumbnail(record.taskId),
+                    selected: _selected.contains(record.taskId),
+                    selectionMode: selected.isNotEmpty,
+                    onSelect: _busy ? null : () => _select(record.taskId),
+                    onActions: _busy ? null : () => _actions(context, record),
+                    onOpen: () => _preview(context, record),
+                    onCancel: () => runAction(
+                      context,
+                      () => repository.cancel(record.taskId),
                     ),
-                  for (final record in repository.records)
-                    DownloadTile(
-                      privacyMode: _private,
-                      record: record,
-                      loadThumbnail: () => repository.thumbnail(record.taskId),
-                      selected: _selected.contains(record.taskId),
-                      selectionMode: selected.isNotEmpty,
-                      onSelect: _busy ? null : () => _select(record.taskId),
-                      onActions: _busy ? null : () => _actions(context, record),
-                      onOpen: () => _preview(context, record),
-                      onCancel: () => runAction(
-                        context,
-                        () => repository.cancel(record.taskId),
-                      ),
-                      onRetry: () => runAction(context, () async {
-                        await repository.retry(record.taskId);
-                      }),
-                    ),
-                ],
+                    onRetry: () => runAction(context, () async {
+                      await repository.retry(record.taskId);
+                    }),
+                  );
+                },
               ),
             ),
           ),

@@ -27,22 +27,25 @@ class FavoriteRepository extends ChangeNotifier {
   List<FavoriteLink> _items = [];
   List<String> _categories = [];
   FavoriteSort _sort = FavoriteSort.defaultOrder;
+  List<FavoriteLink>? _snapshot;
   FavoriteSort get sort => _sort;
   List<String> get categories => List.unmodifiable(_categories);
-  List<FavoriteLink> get items {
+  List<FavoriteLink> get items => _snapshot ??= _sortedItems();
+  List<FavoriteLink> _sortedItems() {
     if (_sort == FavoriteSort.defaultOrder) return List.unmodifiable(_items);
     final positions = {
       for (var i = 0; i < _items.length; i++) _items[i].postId: i,
     };
+    final titles = _sort == FavoriteSort.title
+        ? {for (final item in _items) item.postId: item.title.toLowerCase()}
+        : const <String, String>{};
     final result = [..._items]
       ..sort((a, b) {
         final order = switch (_sort) {
           FavoriteSort.defaultOrder => 0,
           FavoriteSort.newest => b.createdAt.compareTo(a.createdAt),
           FavoriteSort.oldest => a.createdAt.compareTo(b.createdAt),
-          FavoriteSort.title => a.title.toLowerCase().compareTo(
-            b.title.toLowerCase(),
-          ),
+          FavoriteSort.title => titles[a.postId]!.compareTo(titles[b.postId]!),
         };
         return order != 0
             ? order
@@ -80,6 +83,7 @@ class FavoriteRepository extends ChangeNotifier {
       _sort = FavoriteSort.values.byName(
         data['sort'] as String? ?? 'defaultOrder',
       );
+      _snapshot = null;
     } catch (_) {
       throw const AppFailure(FailureKind.storage, '收藏数据损坏，原文件已保留');
     }
@@ -102,6 +106,7 @@ class FavoriteRepository extends ChangeNotifier {
     _items = next;
     _categories = groups;
     _sort = sort ?? _sort;
+    _snapshot = null;
     notifyListeners();
   }
 

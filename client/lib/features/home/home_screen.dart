@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_shell.dart';
+import '../../app/branding_assets.dart';
 import '../../app/favorite_icon.dart';
 import '../../core/parsing/post_link.dart';
 import '../settings/sources_screen.dart';
@@ -12,12 +13,19 @@ class HomeScreen extends StatelessWidget {
   final HomeController controller;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
+    listenable: Listenable.merge([
+      controller,
+      controller.dependencies.settings,
+    ]),
     builder: (context, _) =>
         controller.result == null &&
             !controller.busy &&
             controller.error == null
-        ? const _HomeEmptyState()
+        ? _HomeEmptyState(
+            asset: appAvatarAsset(
+              controller.dependencies.settings.value.playfulAvatar,
+            ),
+          )
         : ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
             children: [
@@ -50,7 +58,8 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _HomeEmptyState extends StatelessWidget {
-  const _HomeEmptyState();
+  const _HomeEmptyState({required this.asset});
+  final String asset;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -92,11 +101,12 @@ class _HomeEmptyState extends StatelessWidget {
                           0,
                         ]),
                         child: Image.asset(
-                          'assets/branding/app_icon.png',
+                          asset,
                           key: const Key('home_empty_art'),
                           width: constraints.maxHeight < 240 ? 72 : 144,
                           height: constraints.maxHeight < 240 ? 72 : 144,
                           cacheWidth: 432,
+                          gaplessPlayback: true,
                         ),
                       ),
                     ),

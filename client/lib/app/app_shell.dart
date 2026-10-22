@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 
@@ -22,7 +23,7 @@ class AppShell extends StatefulWidget {
 class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   late final HomeController home;
   StreamSubscription<String>? _shares;
-  final _pages = PageController();
+  final _pages = _NestedScrollPageController();
   ReleaseCheck? _pendingStartup;
   bool _promptScheduled = false;
   int index = 0;
@@ -291,6 +292,50 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
     ),
   );
+}
+
+// Retain the SDK page position's snapping, restoration and semantics, while
+// allowing a new gesture to reach nested scrollers during page animations.
+class _NestedScrollPageController extends PageController {
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) {
+    final previous = oldPosition?.context;
+    // Absorbing a position after a theme/physics change requires the same context.
+    final interactive =
+        previous is _InteractiveScrollContext &&
+            identical(previous.delegate, context)
+        ? previous
+        : _InteractiveScrollContext(context);
+    return super.createScrollPosition(physics, interactive, oldPosition);
+  }
+}
+
+class _InteractiveScrollContext implements ScrollContext {
+  const _InteractiveScrollContext(this.delegate);
+  final ScrollContext delegate;
+  @override
+  BuildContext? get notificationContext => delegate.notificationContext;
+  @override
+  BuildContext get storageContext => delegate.storageContext;
+  @override
+  TickerProvider get vsync => delegate.vsync;
+  @override
+  AxisDirection get axisDirection => delegate.axisDirection;
+  @override
+  double get devicePixelRatio => delegate.devicePixelRatio;
+  @override
+  void setIgnorePointer(bool value) => delegate.setIgnorePointer(false);
+  @override
+  void setCanDrag(bool value) => delegate.setCanDrag(value);
+  @override
+  void setSemanticsActions(Set<SemanticsAction> actions) =>
+      delegate.setSemanticsActions(actions);
+  @override
+  void saveOffset(double offset) => delegate.saveOffset(offset);
 }
 
 class _PersistentPage extends StatefulWidget {

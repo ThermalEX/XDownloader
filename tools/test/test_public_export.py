@@ -77,6 +77,7 @@ class PublicExportTest(unittest.TestCase):
         import base64
         png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=')
         paths = ['client/assets/branding/app_icon.png',
+                 'client/assets/branding/playful_avatar.png',
                  'client/android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png']
         for name in paths:
             path = self.source / name

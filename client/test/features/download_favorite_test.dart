@@ -48,7 +48,14 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('nav_downloads')));
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.byKey(const Key('download_a')));
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('download_a')),
+          150,
+          scrollable: find.descendant(
+            of: find.byType(RefreshIndicator),
+            matching: find.byType(Scrollable),
+          ),
+        );
         await tester.pumpAndSettle();
         await tester.longPress(find.byKey(const Key('download_a')));
         await tester.pumpAndSettle();

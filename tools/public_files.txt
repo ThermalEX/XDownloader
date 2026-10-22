@@ -194,3 +194,13 @@ tools/public_templates/README.md
 tools/public_templates/key.properties.example
 tools/test/test_public_export.py
 tools/test/test_update_manifest.py
+client/assets/branding/playful_avatar.png
+client/lib/app/branding_assets.dart
+client/lib/features/settings/avatar_easter_egg.dart
+client/test/features/avatar_easter_egg_test.dart
+client/integration_test/avatar_easter_egg_test.dart
+client/test/support/particle_canvas.dart
+client/lib/app/library_search.dart
+client/test/app/library_search_test.dart
+client/test/data/favorite_snapshot_test.dart
+client/test/features/library_search_test.dart

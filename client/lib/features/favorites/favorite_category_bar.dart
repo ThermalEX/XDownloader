@@ -60,6 +60,7 @@ class _CategoryBarState extends State<FavoriteCategoryBar> {
           child: SingleChildScrollView(
             controller: _scroll,
             scrollDirection: Axis.horizontal,
+            physics: const AlwaysScrollableScrollPhysics(),
             child: Row(
               children: [
                 for (final category in <String?>[

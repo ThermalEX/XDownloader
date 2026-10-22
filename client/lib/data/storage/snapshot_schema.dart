@@ -22,6 +22,7 @@ class SnapshotSchema {
           if (!_bool(data['useDynamicColor']) ||
               !_bool(data['autoClipboard']) ||
               !_bool(data['privacyMode']) ||
+              !_bool(data['playfulAvatar']) ||
               !_bool(data['useOriginalFileName'])) {
             return false;
           }

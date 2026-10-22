@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_shell.dart';
+import '../../app/library_search.dart';
 import '../../core/models/app_failure.dart';
 import '../../core/models/download.dart';
 import '../../core/models/download_history.dart';
@@ -26,6 +27,13 @@ class DownloadHistoryScreen extends StatefulWidget {
 }
 
 class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
+  late final _search = LibrarySearch(widget.settings);
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   DownloadPhase? _filter;
   bool _busy = false;
   bool get _private => widget.settings.value.privacyMode;
@@ -158,10 +166,14 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([widget.repository, widget.settings]),
+    listenable: Listenable.merge([widget.repository, widget.settings, _search]),
     builder: (context, _) {
       final entries = widget.repository.history
-          .where((e) => _filter == null || e.phase == _filter)
+          .where(
+            (e) =>
+                (_filter == null || e.phase == _filter) &&
+                _search.matches([e.displayName, e.postUrl]),
+          )
           .toList();
       return Scaffold(
         appBar: AppBar(
@@ -179,6 +191,8 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
         body: SafeArea(
           child: Column(
             children: [
+              if (!_private)
+                LibrarySearchField(search: _search, name: 'history'),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -205,7 +219,9 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
               if (_busy) const LinearProgressIndicator(),
               Expanded(
                 child: entries.isEmpty
-                    ? const Center(child: Text('没有符合条件的历史'))
+                    ? Center(
+                        child: Text(_search.isEmpty ? '没有符合条件的历史' : '没有匹配的结果'),
+                      )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
                         itemCount: entries.length,

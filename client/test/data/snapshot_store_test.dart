@@ -106,6 +106,34 @@ void main() {
     await store.write('sources', {'current': 'xdl'});
     expect((await store.read('sources'))['current'], 'xdl');
   });
+  test(
+    'avatar choice survives reopening disk storage and damaged-field recovery',
+    () async {
+      final first = SettingsRepository(store);
+      await first.initialize();
+      await first.edit(
+        (s) => s.copyWith(playfulAvatar: true, privacyMode: true),
+      );
+      await first.edit((s) => s.copyWith(autoClipboard: false));
+      first.dispose();
+      final reopened = SettingsRepository(SnapshotStore(temp));
+      await reopened.initialize();
+      expect(reopened.value.playfulAvatar, true);
+      expect(reopened.value.privacyMode, true);
+      reopened.dispose();
+      await File('${temp.path}/settings.json').writeAsString(
+        jsonEncode({
+          'version': 1,
+          'data': {'playfulAvatar': 'damaged'},
+        }),
+      );
+      final recovered = SettingsRepository(SnapshotStore(temp));
+      await recovered.initialize();
+      expect(recovered.value.playfulAvatar, true);
+      expect(recovered.value.privacyMode, true);
+      recovered.dispose();
+    },
+  );
   test('failed write keeps the previous durable snapshot', () async {
     await store.write('settings', {'autoClipboard': false});
     await Directory('${temp.path}/settings.json.tmp').create();

@@ -6,6 +6,7 @@ import '../../data/updates/github_release_client.dart';
 import 'settings_group.dart';
 import 'usage_guide_screen.dart';
 import 'changelog_screen.dart';
+import 'avatar_easter_egg.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key, required this.dependencies, this.onOpenTab});
@@ -23,13 +24,7 @@ class AboutScreen extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  Image.asset(
-                    'assets/branding/app_icon.png',
-                    width: 120,
-                    height: 120,
-                    cacheWidth: 384,
-                    semanticLabel: 'XDownloader 图标',
-                  ),
+                  AvatarEasterEgg(settings: dependencies.settings),
                   const SizedBox(height: 16),
                   Text(
                     'XDownloader',
