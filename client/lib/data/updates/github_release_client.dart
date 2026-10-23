@@ -142,34 +142,44 @@ class GitHubReleaseClient {
       if (raw is! List) {
         throw const FormatException('Invalid releases response');
       }
-      for (final item in raw.take(100 - scanned)) {
-        scanned++;
-        try {
-          final r = Map<String, Object?>.from(item as Map);
-          if (r['draft'] == true ||
-              (channel == UpdateChannel.stable && r['prerelease'] == true)) {
-            continue;
-          }
-          final assets = r['assets'] as List;
-          if ((r['body'] as String? ?? '')
-                  .split('\n')
-                  .any((line) => line.trim() == '[xdl-archive]') &&
-              !assets.any((asset) => (asset as Map)['name'] == 'update.json')) {
-            continue;
-          }
-          final candidate = await _release(r, installed, abort);
-          valid++;
-          if (candidate.versionCode > installed.versionCode &&
-              (best == null || candidate.versionCode > best.versionCode)) {
-            best = candidate;
-          }
-        } on AppFailure catch (_) {
-          skipped++;
-        } on FormatException catch (_) {
-          skipped++;
-        } on TypeError catch (_) {
-          skipped++;
-        }
+      final entries = raw.take(100 - scanned).toList();
+      // Bound simultaneous metadata requests while preserving the full scan.
+      for (var offset = 0; offset < entries.length; offset += 3) {
+        await Future.wait<void>(
+          entries.skip(offset).take(3).map((item) async {
+            scanned++;
+            try {
+              final r = Map<String, Object?>.from(item as Map);
+              if (r['draft'] == true ||
+                  (channel == UpdateChannel.stable &&
+                      r['prerelease'] == true)) {
+                return;
+              }
+              final assets = r['assets'] as List;
+              if ((r['body'] as String? ?? '')
+                      .split('\n')
+                      .any((line) => line.trim() == '[xdl-archive]') &&
+                  !assets.any(
+                    (asset) => (asset as Map)['name'] == 'update.json',
+                  )) {
+                return;
+              }
+              final candidate = await _release(r, installed, abort);
+              valid++;
+              if (candidate.versionCode >
+                  (best?.versionCode ?? installed.versionCode)) {
+                best = candidate;
+              }
+            } on AppFailure catch (_) {
+              skipped++;
+            } on FormatException catch (_) {
+              skipped++;
+            } on TypeError catch (_) {
+              skipped++;
+            }
+          }),
+          eagerError: true,
+        );
       }
       if (raw.length < 30) break;
       if (scanned >= 100) complete = false;

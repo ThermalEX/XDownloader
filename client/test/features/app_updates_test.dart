@@ -83,7 +83,7 @@ void main() {
       await tester.tap(find.text('下载更新'));
       await tester.pumpAndSettle();
       expect(f.updateBackend.calls, ['enqueue']);
-      await tester.tap(find.text('关闭'));
+      await tester.tap(find.text('后台继续'));
       await tester.pumpAndSettle();
       await reveal(tester, find.byKey(const Key('update_channel_beta')));
       await tester.tap(find.byKey(const Key('update_channel_beta')));

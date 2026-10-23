@@ -86,10 +86,12 @@ class DownloadTile extends StatelessWidget {
                     value: selected,
                     onChanged: onSelect == null ? null : (_) => onSelect!(),
                   )
-                : r.savedFile != null && loadThumbnail != null
+                : (r.savedFile != null || r.request.coverUrl != null) &&
+                      loadThumbnail != null
                 ? privateView(
                     VideoThumbnail(
-                      locator: r.savedFile!.locator,
+                      locator:
+                          r.savedFile?.locator ?? r.request.coverUrl.toString(),
                       load: loadThumbnail!,
                     ),
                   )

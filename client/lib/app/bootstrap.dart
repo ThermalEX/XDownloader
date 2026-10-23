@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../data/repositories/download_repository.dart';
+import '../data/repositories/cover_cache_repository.dart';
 import '../data/repositories/source_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../data/repositories/favorite_repository.dart';
@@ -54,7 +55,16 @@ Future<AppDependencies> bootstrap() async {
   final sources = SourceRepository(store), settings = SettingsRepository(store);
   final favorites = FavoriteRepository(store);
   final backend = AndroidDownloadBackend();
-  final downloads = DownloadRepository(store: store, backend: backend);
+  final cachePath = await callPlatform('cacheDirectory', {}) as String;
+  final covers = CoverCacheRepository(
+    root: Directory('$cachePath/xdl_video_covers'),
+    settings: settings,
+  );
+  final downloads = DownloadRepository(
+    store: store,
+    backend: backend,
+    coverCache: covers,
+  );
   final updates = UpdateRepository(
     store: store,
     releases: GitHubReleaseClient(client: http.Client()),
@@ -63,6 +73,11 @@ Future<AppDependencies> bootstrap() async {
   try {
     await sources.initialize();
     await settings.initialize();
+    try {
+      await covers.initialize();
+    } on FileSystemException {
+      /* Disposable cache is optional. */
+    }
     await favorites.initialize();
     await downloads.initialize();
     await updates.initialize();

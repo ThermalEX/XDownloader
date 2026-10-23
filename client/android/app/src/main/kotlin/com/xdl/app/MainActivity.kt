@@ -63,6 +63,7 @@ class MainActivity : FlutterActivity() {
                 val args = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
                 val value: Any? = when (call.method) {
                     "supportDirectory" -> filesDir.absolutePath
+                    "cacheDirectory" -> cacheDir.absolutePath
                     "notificationStatus" -> getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled()
                     "initialShare" -> shares.initialText()
                     "readLegacy" -> LegacyDataGateway.read(applicationContext)

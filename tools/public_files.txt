@@ -204,3 +204,10 @@ client/lib/app/library_search.dart
 client/test/app/library_search_test.dart
 client/test/data/favorite_snapshot_test.dart
 client/test/features/library_search_test.dart
+client/lib/data/repositories/cover_cache_repository.dart
+client/lib/features/settings/cover_cache_screen.dart
+client/test/data/cover_cache_test.dart
+client/test/data/cover_metadata_test.dart
+client/test/features/cover_cache_screen_test.dart
+client/test/features/about_details_test.dart
+client/test/data/download_cover_test.dart

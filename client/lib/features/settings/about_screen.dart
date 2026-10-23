@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../app/bootstrap.dart';
@@ -44,12 +46,12 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           SettingsPanel(
-            child: ListTile(
-              key: const Key('usage_guide_entry'),
-              leading: const SettingsIcon(Icons.menu_book_outlined),
-              title: const Text('使用说明'),
-              subtitle: const Text('下载、收藏、播放器与更新'),
-              trailing: const Icon(Icons.chevron_right),
+            child: _AboutInfoTile(
+              tileKey: const Key('usage_guide_entry'),
+              icon: Icons.menu_book_outlined,
+              title: '使用说明',
+              subtitle: '下载、收藏、播放器与更新',
+              trailing: Icons.chevron_right,
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -62,12 +64,11 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           SettingsPanel(
-            child: ListTile(
-              key: const Key('changelog_entry'),
-              minTileHeight: 72,
-              leading: const SettingsIcon(Icons.history_outlined),
-              title: const Text('更新日志'),
-              trailing: const Icon(Icons.chevron_right),
+            child: _AboutInfoTile(
+              tileKey: const Key('changelog_entry'),
+              icon: Icons.history_outlined,
+              title: '更新日志',
+              trailing: Icons.chevron_right,
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -78,25 +79,26 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           SettingsPanel(
-            child: ListTile(
-              leading: const SettingsIcon(Icons.person_outline),
-              title: const Text('作者'),
-              subtitle: const Text('ThermalEX'),
+            child: _AboutInfoTile(
+              icon: Icons.person_outline,
+              title: '作者',
+              subtitle: 'ThermalEX',
             ),
           ),
           const SettingsPanel(
-            child: ListTile(
-              leading: SettingsIcon(Icons.layers_outlined),
-              title: Text('技术栈'),
-              subtitle: Text('Flutter · Dart · Material 3\nAndroid · Kotlin'),
+            child: _AboutInfoTile(
+              icon: Icons.layers_outlined,
+              title: '技术栈',
+              subtitle: 'Flutter · Dart · Material 3 · Android · Kotlin',
+              details: 'Flutter · Dart · Material 3\nAndroid · Kotlin',
             ),
           ),
           SettingsPanel(
-            child: ListTile(
-              leading: const SettingsIcon(Icons.code),
-              title: const Text('GitHub 源码仓库'),
-              subtitle: const Text('ThermalEX/XDownloader'),
-              trailing: const Icon(Icons.open_in_new),
+            child: _AboutInfoTile(
+              icon: Icons.code,
+              title: 'GitHub 源码仓库',
+              subtitle: 'ThermalEX/XDownloader',
+              trailing: Icons.open_in_new,
               onTap: () => runAction(
                 context,
                 () => dependencies.updates.openPage(
@@ -122,4 +124,91 @@ class AboutScreen extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _AboutInfoTile extends StatelessWidget {
+  const _AboutInfoTile({
+    this.tileKey,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.details,
+    this.trailing,
+    this.onTap,
+  });
+
+  final Key? tileKey;
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final String? details;
+  final IconData? trailing;
+  final VoidCallback? onTap;
+
+  void _showDetails(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: colors.surface.withValues(
+        alpha: colors.brightness == Brightness.dark ? 0.56 : 0.32,
+      ),
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: Text(title),
+        content: subtitle == null ? null : Text(details ?? subtitle!),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final titleStyle = textTheme.titleMedium!;
+    final subtitleStyle = textTheme.bodyMedium!;
+    final scaler = MediaQuery.textScalerOf(context);
+    // Reserve the same two text lines for every row, including title-only rows.
+    // Scaling this shared height keeps both lines readable at large text sizes.
+    final height = math.max(
+      72.0,
+      scaler.scale(titleStyle.fontSize!) * (titleStyle.height ?? 1.5) +
+          scaler.scale(subtitleStyle.fontSize!) *
+              (subtitleStyle.height ?? 1.5) +
+          16,
+    );
+    return SizedBox(
+      height: height,
+      child: Semantics(
+        hint: onTap == null ? '轻触查看完整文字' : '长按查看完整文字',
+        child: ListTile(
+          key: tileKey,
+          minTileHeight: height,
+          minVerticalPadding: 8,
+          titleTextStyle: titleStyle,
+          subtitleTextStyle: subtitleStyle,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          leading: SettingsIcon(icon),
+          title: Text(
+            title,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.fade,
+          ),
+          subtitle: subtitle == null
+              ? null
+              : Text(
+                  subtitle!,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.fade,
+                ),
+          trailing: trailing == null ? null : Icon(trailing),
+          onTap: onTap ?? () => _showDetails(context),
+          onLongPress: onTap == null ? null : () => _showDetails(context),
+        ),
+      ),
+    );
+  }
 }

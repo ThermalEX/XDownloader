@@ -383,6 +383,7 @@ class HomeFavoriteAction extends StatelessWidget {
                   await home.dependencies.favorites.add(
                     home.input,
                     title: home.result?.title,
+                    coverUrl: home.result?.thumbnail,
                   );
                 }
                 if (context.mounted) {

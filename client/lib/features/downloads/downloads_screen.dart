@@ -110,6 +110,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           if (await widget.favorites.add(
             source.url.toString(),
             title: source.title,
+            coverUrl: record.request.coverUrl,
           )) {
             added++;
           } else {

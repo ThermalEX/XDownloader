@@ -4,6 +4,7 @@ import '../../app/app_shell.dart';
 import '../../data/repositories/download_repository.dart';
 
 import 'settings_group.dart';
+import 'cover_cache_screen.dart';
 
 class StorageSettingsScreen extends StatelessWidget {
   const StorageSettingsScreen({super.key, required this.repository});
@@ -15,6 +16,27 @@ class StorageSettingsScreen extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (repository.coverCache case final cache?)
+            SettingsPanel(
+              child: ListenableBuilder(
+                listenable: cache,
+                builder: (context, _) => ListTile(
+                  key: const Key('cover_cache_settings'),
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('封面缓存'),
+                  subtitle: Text(
+                    '${cacheSize(cache.usedBytes)} / ${cache.limitMb} MB',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => CoverCacheScreen(cache: cache),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           SettingsPanel(
             title: '文件存储',
             child: ListTile(

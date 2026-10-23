@@ -9,9 +9,15 @@ import '../../core/parsing/post_link.dart';
 import '../../platform/download_backend.dart';
 import '../storage/snapshot_store.dart';
 import '../storage/serial_queue.dart';
+import 'cover_cache_repository.dart';
 
 class DownloadRepository extends ChangeNotifier {
-  DownloadRepository({required this.store, required this.backend});
+  DownloadRepository({
+    required this.store,
+    required this.backend,
+    this.coverCache,
+  });
+  final CoverCacheRepository? coverCache;
   final SnapshotStore store;
   final DownloadBackend backend;
   final _queue = SerialQueue();
@@ -363,8 +369,70 @@ class DownloadRepository extends ChangeNotifier {
     return file;
   });
   Future<Uint8List?> thumbnail(String id) async {
-    final file = _find(id)?.savedFile;
-    return file == null ? null : backend.thumbnailSavedFile(file);
+    final record = _find(id);
+    if (record == null) return null;
+    final file = record.savedFile;
+    final cache = coverCache;
+    if (cache == null) {
+      return file == null ? null : backend.thumbnailSavedFile(file);
+    }
+    final link =
+        record.request.postUrl ??
+        _history.where((h) => h.taskId == id).firstOrNull?.postUrl;
+    final postId = PostLink.tryParse(link.toString())?.postId ?? id;
+    if (file != null) {
+      final data = await cache.get(
+        record.request.mediaIndex == 1
+            ? 'post:$postId'
+            : 'video:${file.locator}',
+        () => backend.thumbnailSavedFile(file),
+      );
+      if (data != null) return data;
+    }
+    final url = record.request.coverUrl;
+    return url == null ? null : cache.remote('post:$postId', url);
+  }
+
+  Future<Uint8List?> favoriteCover(String postId, {Uri? coverUrl}) async {
+    final cache = coverCache;
+    if (cache == null) return null;
+    if (coverUrl != null) {
+      final data = await cache.remote('post:$postId', coverUrl);
+      if (data != null) return data;
+    }
+    final historyIds = _history
+        .where(
+          (h) =>
+              h.postUrl != null &&
+              PostLink.tryParse(h.postUrl.toString())?.postId == postId,
+        )
+        .map((h) => h.taskId)
+        .toSet();
+    final matches = _records
+        .where(
+          (r) =>
+              r.savedFile != null &&
+              (historyIds.contains(r.taskId) ||
+                  PostLink.tryParse(r.request.postUrl.toString())?.postId ==
+                      postId),
+        )
+        .toList();
+    final record =
+        matches.where((r) => r.request.mediaIndex == 1).firstOrNull ??
+        matches.firstOrNull;
+    final data = await cache.get('post:$postId', () async {
+      if (record == null) return null;
+      return record.request.mediaIndex == 1
+          ? backend.thumbnailSavedFile(record.savedFile!)
+          : cache.get(
+              'video:${record.savedFile!.locator}',
+              () => backend.thumbnailSavedFile(record.savedFile!),
+            );
+    });
+    final fallback = record?.request.coverUrl;
+    return data != null || fallback == null || fallback == coverUrl
+        ? data
+        : cache.remote('post:$postId', fallback);
   }
 
   Future<void> _removeRecord(String id) async {
@@ -435,6 +503,7 @@ class DownloadRepository extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     unawaited(_subscription?.cancel());
+    coverCache?.dispose();
     super.dispose();
   }
 }

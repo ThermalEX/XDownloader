@@ -10,6 +10,7 @@ class AppSettings {
     this.autoClipboard = true,
     this.privacyMode = false,
     this.playfulAvatar = false,
+    this.coverCacheLimitMb = 100,
     this.useOriginalFileName = false,
     this.fileNameTemplate = FileNaming.defaultTemplate,
   });
@@ -18,6 +19,7 @@ class AppSettings {
   final bool useDynamicColor, autoClipboard;
   final bool privacyMode, useOriginalFileName;
   final bool playfulAvatar;
+  final int coverCacheLimitMb;
   final String fileNameTemplate;
   AppSettings copyWith({
     AppThemeMode? themeMode,
@@ -26,6 +28,7 @@ class AppSettings {
     bool? autoClipboard,
     bool? privacyMode,
     bool? playfulAvatar,
+    int? coverCacheLimitMb,
     bool? useOriginalFileName,
     String? fileNameTemplate,
   }) => AppSettings(
@@ -35,6 +38,7 @@ class AppSettings {
     autoClipboard: autoClipboard ?? this.autoClipboard,
     privacyMode: privacyMode ?? this.privacyMode,
     playfulAvatar: playfulAvatar ?? this.playfulAvatar,
+    coverCacheLimitMb: coverCacheLimitMb ?? this.coverCacheLimitMb,
     useOriginalFileName: useOriginalFileName ?? this.useOriginalFileName,
     fileNameTemplate: fileNameTemplate ?? this.fileNameTemplate,
   );
@@ -45,6 +49,7 @@ class AppSettings {
     'autoClipboard': autoClipboard,
     'privacyMode': privacyMode,
     'playfulAvatar': playfulAvatar,
+    'coverCacheLimitMb': coverCacheLimitMb,
     'useOriginalFileName': useOriginalFileName,
     'fileNameTemplate': fileNameTemplate,
   };
@@ -59,8 +64,17 @@ class AppSettings {
     autoClipboard: m['autoClipboard'] != false,
     privacyMode: m['privacyMode'] == true,
     playfulAvatar: m['playfulAvatar'] == true,
+    coverCacheLimitMb: _cacheLimit(m['coverCacheLimitMb']),
     useOriginalFileName: m['useOriginalFileName'] == true,
     fileNameTemplate:
         m['fileNameTemplate'] as String? ?? FileNaming.defaultTemplate,
   );
+}
+
+int _cacheLimit(Object? value) {
+  if (value == null) return 100;
+  if (value is! int || value < 0 || value > 2048) {
+    throw const FormatException('Invalid cover cache limit');
+  }
+  return value;
 }

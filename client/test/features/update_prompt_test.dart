@@ -100,8 +100,21 @@ void main() {
       expect(f.updateBackend.calls, ['enqueue']);
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.text('正在下载安装包'), findsOneWidget);
-      await tester.tap(find.text('关闭'));
+      expect(find.text('取消下载'), findsOneWidget);
+      expect(find.text('后台继续'), findsOneWidget);
+      final cancel = tester.getRect(
+        find.byKey(const Key('update_dialog_cancel_download')),
+      );
+      final background = tester.getRect(
+        find.byKey(const Key('update_dialog_dismiss')),
+      );
+      expect(cancel.center.dy, closeTo(background.center.dy, 1));
+      expect(cancel.right, lessThanOrEqualTo(background.left));
+      await tester.tap(find.text('后台继续'));
       await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, ['enqueue']);
+      expect(f.updates.transfer.phase, UpdatePhase.running);
     }),
   );
   for (final invalidate in ['suppress', 'manual check']) {
@@ -241,6 +254,23 @@ void main() {
         await tester.tap(find.text('下载更新'));
         await tester.pumpAndSettle();
         expect(f.updateBackend.calls, ['enqueue']);
+        final cancel = find.byKey(const Key('update_dialog_cancel_download'));
+        final background = find.byKey(const Key('update_dialog_dismiss'));
+        expect(
+          tester.getCenter(cancel).dy,
+          closeTo(tester.getCenter(background).dy, 1),
+        );
+        expect(
+          tester.getRect(cancel).right,
+          lessThanOrEqualTo(tester.getRect(background).left),
+        );
+        expect(tester.takeException(), isNull);
+        await tester.tap(cancel);
+        await tester.pumpAndSettle();
+        expect(f.updateBackend.calls, ['enqueue', 'cancel']);
+        expect(f.updates.transfer.phase, UpdatePhase.cancelled);
+        expect(find.text('后台继续'), findsNothing);
+        expect(find.text('关闭'), findsOneWidget);
       }),
     );
   }

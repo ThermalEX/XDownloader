@@ -7,23 +7,28 @@ class FavoriteLink {
     required this.title,
     required this.createdAt,
     this.category = '',
+    this.coverUrl,
   });
   final String postId, title, category;
   final Uri url;
   final DateTime createdAt;
-  FavoriteLink copyWith({String? title, String? category}) => FavoriteLink(
-    postId: postId,
-    url: url,
-    title: title ?? this.title,
-    category: category ?? this.category,
-    createdAt: createdAt,
-  );
+  final Uri? coverUrl;
+  FavoriteLink copyWith({String? title, String? category, Uri? coverUrl}) =>
+      FavoriteLink(
+        postId: postId,
+        url: url,
+        title: title ?? this.title,
+        category: category ?? this.category,
+        coverUrl: coverUrl ?? this.coverUrl,
+        createdAt: createdAt,
+      );
   Map<String, Object?> toJson() => {
     'postId': postId,
     'url': url.toString(),
     'title': title,
     'category': category,
     'createdAt': createdAt.toUtc().toIso8601String(),
+    if (coverUrl != null) 'coverUrl': coverUrl.toString(),
   };
   factory FavoriteLink.fromJson(Map<String, Object?> data) {
     final raw = data['url'] as String;
@@ -43,6 +48,9 @@ class FavoriteLink {
       title: data['title'] as String,
       category: category,
       createdAt: DateTime.parse(data['createdAt'] as String),
+      coverUrl: data['coverUrl'] == null
+          ? null
+          : Uri.parse(data['coverUrl'] as String),
     );
   }
 }

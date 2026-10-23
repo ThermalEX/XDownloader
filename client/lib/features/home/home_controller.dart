@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'dart:async';
+
 import '../../app/bootstrap.dart';
 import '../../core/models/app_failure.dart';
 import '../../core/models/media.dart';
@@ -54,7 +56,17 @@ class HomeController extends ChangeNotifier {
         autoFallback: dependencies.sources.autoFallback,
         cancellation: cancellation,
       );
-      if (!_disposed && generation == _generation) result = value;
+      if (!_disposed && generation == _generation) {
+        result = value;
+        if (!dependencies.settings.value.privacyMode) {
+          // Metadata only; viewing favorites loads the actual cover lazily.
+          unawaited(
+            dependencies.favorites
+                .rememberCover(value.post.postId, value.thumbnail)
+                .catchError((_) {}),
+          );
+        }
+      }
     } catch (e) {
       if (!_disposed &&
           generation == _generation &&
@@ -125,6 +137,7 @@ class HomeController extends ChangeNotifier {
         },
         mediaIndex: variant.mediaIndex,
         postUrl: media.post.canonicalUrl,
+        coverUrl: media.thumbnail,
         width: variant.width,
         height: variant.height,
       ),

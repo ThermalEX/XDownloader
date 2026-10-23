@@ -62,6 +62,114 @@ InstalledAppInfo installed({
 );
 
 void main() {
+  test(
+    'a fatal manifest timeout aborts without waiting for other manifests',
+    () async {
+      final gates = List.generate(3, (_) => Completer<http.Response>());
+      final started = Completer<void>();
+      var count = 0;
+      final client = GitHubReleaseClient(
+        client: MockClient((request) async {
+          if (request.url.host == 'api.github.com') {
+            return http.Response(
+              jsonEncode([release(16), release(17), release(18)]),
+              200,
+            );
+          }
+          final gate = gates[count++];
+          if (count == 3) started.complete();
+          return gate.future;
+        }),
+      );
+      try {
+        final checking = client.check(
+          installed: installed(),
+          channel: UpdateChannel.stable,
+        );
+        await started.future.timeout(const Duration(seconds: 2));
+        final failure = TimeoutException('one manifest timed out');
+        gates.first.completeError(failure);
+        await expectLater(
+          checking.timeout(const Duration(seconds: 2)),
+          throwsA(same(failure)),
+        );
+      } finally {
+        for (final gate in gates) {
+          if (!gate.isCompleted) gate.complete(http.Response('{}', 200));
+        }
+        client.close();
+      }
+    },
+  );
+  test('manifest checks overlap with at most three requests and retain the highest code', () async {
+    final gates = List.generate(7, (_) => Completer<http.Response>());
+    final started = <int>[];
+    final first = Completer<void>();
+    var active = 0, peak = 0;
+    final entries = [
+      for (var i = 0; i < gates.length; i++)
+        {
+          ...release(16 + i),
+          'tag_name': 'v2.5.$i',
+          'html_url':
+              'https://github.com/ThermalEX/XDownloader/releases/tag/v2.5.$i',
+          'assets': [
+            for (final name in ['update.json', 'app-arm.apk', 'app.apk'])
+              {
+                'name': name,
+                'state': 'uploaded',
+                'size': name == 'app-arm.apk' ? 80 : 100,
+                'browser_download_url':
+                    'https://github.com/ThermalEX/XDownloader/releases/download/v2.5.$i/$name',
+              },
+          ],
+        },
+    ];
+    final client = GitHubReleaseClient(
+      client: MockClient((request) async {
+        if (request.url.host == 'api.github.com') {
+          return http.Response(jsonEncode(entries), 200);
+        }
+        final i = int.parse(request.url.pathSegments[4].split('.').last);
+        started.add(i);
+        if (!first.isCompleted) first.complete();
+        active++;
+        if (active > peak) peak = active;
+        try {
+          return await gates[i].future;
+        } finally {
+          active--;
+        }
+      }),
+    );
+    try {
+      final checking = client.check(
+        installed: installed(),
+        channel: UpdateChannel.stable,
+      );
+      await first.future.timeout(const Duration(seconds: 2));
+      await Future<void>.delayed(Duration.zero);
+      expect(started.length, 3);
+      for (var i = gates.length - 1; i >= 0; i--) {
+        gates[i].complete(
+          http.Response(
+            jsonEncode({...manifest(16 + i), 'versionName': '2.5.$i'}),
+            200,
+          ),
+        );
+      }
+      final result = await checking;
+      expect(peak, 3);
+      expect(result.candidate!.versionCode, 22);
+      expect(result.validReleases, 7);
+      expect(result.scopeComplete, isTrue);
+    } finally {
+      for (final gate in gates) {
+        if (!gate.isCompleted) gate.complete(http.Response('{}', 200));
+      }
+      client.close();
+    }
+  });
   Future<ReleaseCheck> check(
     List<Map<String, Object?>> releases, {
     UpdateChannel channel = UpdateChannel.stable,

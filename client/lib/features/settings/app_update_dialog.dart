@@ -78,6 +78,17 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
     builder: (context, _) {
       final busy = _starting || repo.checking;
       final candidate = busy ? null : repo.result?.candidate;
+      final downloading = const [
+        UpdatePhase.queued,
+        UpdatePhase.running,
+        UpdatePhase.verifying,
+      ].contains(repo.transfer.phase);
+      final dismiss = TextButton(
+        key: const Key('update_dialog_dismiss'),
+        onPressed: () => Navigator.pop(context),
+        style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+        child: Text(downloading ? '后台继续' : '关闭', textAlign: TextAlign.center),
+      );
       return AlertDialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -172,10 +183,25 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('关闭'),
-          ),
+          if (repo.transfer.active)
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    key: const Key('update_dialog_cancel_download'),
+                    onPressed: repo.operating
+                        ? null
+                        : () => runAction(context, repo.cancelDownload),
+                    style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+                    child: const Text('取消下载', textAlign: TextAlign.center),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: dismiss),
+              ],
+            )
+          else
+            dismiss,
           if (candidate != null && !repo.transfer.active)
             FilledButton.icon(
               onPressed: repo.operating
@@ -246,13 +272,6 @@ class _UpdateTransferView extends StatelessWidget {
             label: const Text('继续安装'),
           ),
         ],
-        if (state.active)
-          TextButton(
-            onPressed: repo.operating
-                ? null
-                : () => runAction(context, repo.cancelDownload),
-            child: const Text('取消更新下载'),
-          ),
       ],
     );
   }

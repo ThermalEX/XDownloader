@@ -8,6 +8,7 @@ class DownloadRequest {
     required this.headers,
     required this.mediaIndex,
     this.postUrl,
+    this.coverUrl,
     this.width,
     this.height,
   });
@@ -17,6 +18,7 @@ class DownloadRequest {
   final Map<String, String> headers;
   final int mediaIndex;
   final Uri? postUrl;
+  final Uri? coverUrl;
   final int? width, height;
   Map<String, Object?> toJson() => {
     'taskId': taskId,
@@ -25,6 +27,7 @@ class DownloadRequest {
     'headers': headers,
     'mediaIndex': mediaIndex,
     'postUrl': postUrl?.toString(),
+    if (coverUrl != null) 'coverUrl': coverUrl.toString(),
     'width': width,
     'height': height,
   };
@@ -35,6 +38,7 @@ class DownloadRequest {
     headers: Map<String, String>.from(m['headers'] as Map? ?? {}),
     mediaIndex: (m['mediaIndex'] as num?)?.toInt() ?? 1,
     postUrl: m['postUrl'] == null ? null : Uri.parse(m['postUrl'] as String),
+    coverUrl: m['coverUrl'] == null ? null : Uri.parse(m['coverUrl'] as String),
     width: (m['width'] as num?)?.toInt(),
     height: (m['height'] as num?)?.toInt(),
   );
@@ -45,6 +49,7 @@ class DownloadRequest {
     headers: headers,
     mediaIndex: mediaIndex,
     postUrl: postUrl,
+    coverUrl: coverUrl,
     width: width,
     height: height,
   );

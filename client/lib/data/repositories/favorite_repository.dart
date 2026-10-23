@@ -170,33 +170,55 @@ class FavoriteRepository extends ChangeNotifier {
     );
   });
 
-  Future<bool> add(String input, {String? title}) => _queue.run(() async {
-    final post = PostLink.tryParse(input);
-    if (post == null) {
-      throw const AppFailure(FailureKind.invalidLink, '请输入有效的 X 帖子链接');
-    }
-    final text = String.fromCharCodes((title ?? '').trim().runes.take(300));
-    final existing = _items.where((f) => f.postId == post.postId).firstOrNull;
-    if (existing != null) {
-      if (existing.title.isEmpty && text.isNotEmpty) {
-        await _save(
-          _items
-              .map((f) => f.postId == post.postId ? f.copyWith(title: text) : f)
-              .toList(),
-        );
+  Future<bool> add(String input, {String? title, Uri? coverUrl}) => _queue.run(
+    () async {
+      final post = PostLink.tryParse(input);
+      if (post == null) {
+        throw const AppFailure(FailureKind.invalidLink, '请输入有效的 X 帖子链接');
       }
-      return false;
+      final text = String.fromCharCodes((title ?? '').trim().runes.take(300));
+      final existing = _items.where((f) => f.postId == post.postId).firstOrNull;
+      if (existing != null) {
+        if ((existing.title.isEmpty && text.isNotEmpty) ||
+            (coverUrl != null && coverUrl != existing.coverUrl)) {
+          await _save(
+            _items
+                .map(
+                  (f) => f.postId == post.postId
+                      ? f.copyWith(
+                          title: existing.title.isEmpty ? text : null,
+                          coverUrl: coverUrl,
+                        )
+                      : f,
+                )
+                .toList(),
+          );
+        }
+        return false;
+      }
+      await _save([
+        FavoriteLink(
+          postId: post.postId,
+          url: post.canonicalUrl,
+          title: text,
+          createdAt: DateTime.now().toUtc(),
+          coverUrl: coverUrl,
+        ),
+        ..._items,
+      ]);
+      return true;
+    },
+  );
+  Future<void> rememberCover(String postId, Uri? url) => _queue.run(() async {
+    if (url == null ||
+        !_items.any((f) => f.postId == postId && f.coverUrl != url)) {
+      return;
     }
-    await _save([
-      FavoriteLink(
-        postId: post.postId,
-        url: post.canonicalUrl,
-        title: text,
-        createdAt: DateTime.now().toUtc(),
-      ),
-      ..._items,
-    ]);
-    return true;
+    await _save(
+      _items
+          .map((f) => f.postId == postId ? f.copyWith(coverUrl: url) : f)
+          .toList(),
+    );
   });
   Future<void> remove(String postId) async {
     await removeForUndo(postId);

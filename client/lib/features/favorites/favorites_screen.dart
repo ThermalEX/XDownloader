@@ -11,6 +11,7 @@ import '../../data/repositories/favorite_repository.dart';
 import '../../core/parsing/post_link.dart';
 import 'favorite_filter_sheet.dart';
 import 'favorite_category_bar.dart';
+import '../downloads/video_thumbnail.dart';
 
 void _ensureVisible(AppDependencies dependencies) {
   if (dependencies.settings.value.privacyMode) {
@@ -448,13 +449,47 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                   value: chosen.contains(item.postId),
                                   onChanged: (_) => _select(item.postId),
                                 )
-                              : IconButton(
-                                  key: Key('favorite_remove_${item.postId}'),
-                                  tooltip: '取消收藏',
-                                  onPressed: () => _remove(item.postId),
-                                  icon: Icon(
-                                    Icons.favorite,
-                                    color: savedHeartColor(context),
+                              : SizedBox.square(
+                                  dimension: 64,
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: VideoThumbnail(
+                                          locator:
+                                              '${item.postId}:${item.coverUrl}',
+                                          load: () => dependencies.downloads
+                                              .favoriteCover(
+                                                item.postId,
+                                                coverUrl: item.coverUrl,
+                                              ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.bottomRight,
+                                        child: IconButton(
+                                          key: Key(
+                                            'favorite_remove_${item.postId}',
+                                          ),
+                                          tooltip: '取消收藏',
+                                          onPressed: () => _remove(item.postId),
+                                          icon: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: colors
+                                                  .surfaceContainerHighest,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(4),
+                                              child: Icon(
+                                                Icons.favorite,
+                                                size: 20,
+                                                color: savedHeartColor(context),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                           title: Text(
