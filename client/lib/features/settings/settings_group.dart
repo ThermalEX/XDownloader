@@ -1,4 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
+// Reserve two lines for both one-line and two-line settings rows.
+// Scale each theme style separately to support nonlinear accessibility scaling.
+double settingsRowHeight(BuildContext context) {
+  final textTheme = Theme.of(context).textTheme;
+  final titleStyle = textTheme.titleMedium!;
+  final subtitleStyle = textTheme.bodyMedium!;
+  final scaler = MediaQuery.textScalerOf(context);
+  return math.max(
+    72.0,
+    scaler.scale(titleStyle.fontSize!) * (titleStyle.height ?? 1.5) +
+        scaler.scale(subtitleStyle.fontSize!) * (subtitleStyle.height ?? 1.5) +
+        16,
+  );
+}
 
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({

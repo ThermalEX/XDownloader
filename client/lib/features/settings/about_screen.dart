@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../app/bootstrap.dart';
@@ -166,16 +164,7 @@ class _AboutInfoTile extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final titleStyle = textTheme.titleMedium!;
     final subtitleStyle = textTheme.bodyMedium!;
-    final scaler = MediaQuery.textScalerOf(context);
-    // Reserve the same two text lines for every row, including title-only rows.
-    // Scaling this shared height keeps both lines readable at large text sizes.
-    final height = math.max(
-      72.0,
-      scaler.scale(titleStyle.fontSize!) * (titleStyle.height ?? 1.5) +
-          scaler.scale(subtitleStyle.fontSize!) *
-              (subtitleStyle.height ?? 1.5) +
-          16,
-    );
+    final height = settingsRowHeight(context);
     return SizedBox(
       height: height,
       child: Semantics(

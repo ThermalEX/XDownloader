@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../app/app_shell.dart';
 import '../../app/bootstrap.dart';
 import '../../app/favorite_icon.dart';
+import '../../app/floating_actions_page.dart';
 import '../../app/library_search.dart';
 import '../../core/models/app_failure.dart';
 import '../../core/models/favorite_link.dart';
@@ -115,6 +116,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         SnackBar(
           content: Text('已删除 ${removed.length} 项收藏'),
           duration: const Duration(seconds: 6),
+          persist: false,
           action: SnackBarAction(
             label: '撤回',
             onPressed: () => runAction(context, () async {
@@ -263,6 +265,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       SnackBar(
         content: const Text('已取消收藏'),
         duration: const Duration(seconds: 6),
+        persist: false,
         action: SnackBarAction(
           label: '撤回',
           onPressed: () {
@@ -411,7 +414,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           Expanded(
             child: visible.isEmpty
                 ? ListView(
-                    padding: const EdgeInsets.all(32),
+                    padding: EdgeInsets.fromLTRB(
+                      32,
+                      32,
+                      32,
+                      32 + FloatingActionsPage.bottomInsetOf(context),
+                    ),
                     children: [
                       const SizedBox(height: 48),
                       const Icon(Icons.favorite_border, size: 48),
@@ -432,7 +440,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     ],
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      0,
+                      16,
+                      24 + FloatingActionsPage.bottomInsetOf(context),
+                    ),
                     itemCount: visible.length,
                     itemBuilder: (context, index) {
                       final item = visible[index];
@@ -451,56 +464,19 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 )
                               : SizedBox.square(
                                   dimension: 64,
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: VideoThumbnail(
-                                          locator:
-                                              '${item.postId}:${item.coverUrl}',
-                                          load: () => dependencies.downloads
-                                              .favoriteCover(
-                                                item.postId,
-                                                coverUrl: item.coverUrl,
-                                              ),
+                                  child: VideoThumbnail(
+                                    locator: '${item.postId}:${item.coverUrl}',
+                                    load: () =>
+                                        dependencies.downloads.favoriteCover(
+                                          item.postId,
+                                          coverUrl: item.coverUrl,
                                         ),
-                                      ),
-                                      Align(
-                                        alignment: Alignment.bottomRight,
-                                        child: IconButton(
-                                          key: Key(
-                                            'favorite_remove_${item.postId}',
-                                          ),
-                                          tooltip: '取消收藏',
-                                          onPressed: () => _remove(item.postId),
-                                          icon: DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              color: colors
-                                                  .surfaceContainerHighest,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(4),
-                                              child: Icon(
-                                                Icons.favorite,
-                                                size: 20,
-                                                color: savedHeartColor(context),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
                           title: Text(
                             item.title.isEmpty
                                 ? 'X 帖子 ${item.postId}'
                                 : item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${item.category.isEmpty ? '' : '${item.category} · '}${item.url}',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -512,60 +488,102 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                 }),
                           trailing: selecting
                               ? null
-                              : PopupMenuButton<String>(
-                                  key: Key('favorite_actions_${item.postId}'),
-                                  tooltip: '收藏操作',
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(20),
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox.square(
+                                      dimension: 48,
+                                      child: PopupMenuButton<String>(
+                                        key: Key(
+                                          'favorite_actions_${item.postId}',
+                                        ),
+                                        tooltip: '收藏操作',
+                                        shape: const RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.all(
+                                            Radius.circular(20),
+                                          ),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        onSelected: (action) => runAction(
+                                          context,
+                                          () async {
+                                            _ensureVisible(dependencies);
+                                            if (action == 'details') {
+                                              await showDialog<void>(
+                                                context: context,
+                                                builder: (_) =>
+                                                    _FavoriteDetailsDialog(
+                                                      dependencies:
+                                                          dependencies,
+                                                      item: item,
+                                                    ),
+                                              );
+                                            } else if (action == 'rename' ||
+                                                action == 'category') {
+                                              await _editFavorite(
+                                                context,
+                                                dependencies,
+                                                item,
+                                                category: action == 'category',
+                                              );
+                                            } else if (action == 'copy') {
+                                              await Clipboard.setData(
+                                                ClipboardData(
+                                                  text: item.url.toString(),
+                                                ),
+                                              );
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text('已复制链接'),
+                                                      ),
+                                                    );
+                                              }
+                                            } else {
+                                              await _remove(item.postId);
+                                            }
+                                          },
+                                        ),
+                                        itemBuilder: (_) => const [
+                                          PopupMenuItem(
+                                            value: 'details',
+                                            child: Text('详情'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'rename',
+                                            child: Text('重命名'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'category',
+                                            child: Text('分类'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'copy',
+                                            child: Text('复制链接'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'remove',
+                                            child: Text('取消收藏'),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  onSelected: (action) =>
-                                      runAction(context, () async {
-                                        _ensureVisible(dependencies);
-                                        if (action == 'rename' ||
-                                            action == 'category') {
-                                          await _editFavorite(
-                                            context,
-                                            dependencies,
-                                            item,
-                                            category: action == 'category',
-                                          );
-                                        } else if (action == 'copy') {
-                                          await Clipboard.setData(
-                                            ClipboardData(
-                                              text: item.url.toString(),
-                                            ),
-                                          );
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text('已复制链接'),
-                                                  ),
-                                                );
-                                          }
-                                        } else {
-                                          await _remove(item.postId);
-                                        }
-                                      }),
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(
-                                      value: 'rename',
-                                      child: Text('重命名'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'category',
-                                      child: Text('分类'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'copy',
-                                      child: Text('复制链接'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'remove',
-                                      child: Text('取消收藏'),
+                                    IconButton(
+                                      key: Key(
+                                        'favorite_remove_${item.postId}',
+                                      ),
+                                      tooltip: '取消收藏',
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 48,
+                                            height: 48,
+                                          ),
+                                      onPressed: () => _remove(item.postId),
+                                      icon: Icon(
+                                        Icons.favorite,
+                                        color: savedHeartColor(context),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -577,6 +595,96 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ],
       );
     },
+  );
+}
+
+class _FavoriteDetailsDialog extends StatelessWidget {
+  const _FavoriteDetailsDialog({
+    required this.dependencies,
+    required this.item,
+  });
+  final AppDependencies dependencies;
+  final FavoriteLink item;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: dependencies.settings,
+    builder: (context, _) {
+      final hidden = dependencies.settings.value.privacyMode;
+      final recordedAuthor = item.author?.trim() ?? '';
+      final user = PostLink.tryParse(item.url.toString())?.user;
+      final author = recordedAuthor.isNotEmpty
+          ? recordedAuthor
+          : user == null || user.toLowerCase() == 'i'
+          ? '未记录'
+          : user;
+      return AlertDialog(
+        title: Text(hidden ? '隐私模式已启动，无法查看收藏' : '收藏详情'),
+        scrollable: true,
+        content: hidden
+            ? null
+            : SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _detailRow(
+                      context,
+                      'name',
+                      '名称',
+                      item.title.isEmpty ? 'X 帖子 ${item.postId}' : item.title,
+                    ),
+                    _detailRow(context, 'url', '链接', item.url.toString()),
+                    _detailRow(context, 'author', '作者', author),
+                  ],
+                ),
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
+      );
+    },
+  );
+
+  Widget _detailRow(
+    BuildContext context,
+    String key,
+    String label,
+    String value,
+  ) => InkWell(
+    key: Key('favorite_detail_$key'),
+    borderRadius: BorderRadius.circular(12),
+    onTap: () => runAction(context, () async {
+      _ensureVisible(dependencies);
+      await Clipboard.setData(ClipboardData(text: value));
+      if (context.mounted && !dependencies.settings.value.privacyMode) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('已复制$label')));
+      }
+    }),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Text(label, maxLines: 1),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                value,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 }
 
@@ -832,33 +940,39 @@ class FavoritesActions extends StatelessWidget {
         : Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 56),
+              child: FloatingActionAnchor(
+                key: const Key('favorites_action_row'),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 56),
+                        ),
+                        onPressed: () =>
+                            _add(context, dependencies, clipboard: false),
+                        icon: const Icon(Icons.add),
+                        label: const Text('添加链接', textAlign: TextAlign.center),
                       ),
-                      onPressed: () =>
-                          _add(context, dependencies, clipboard: false),
-                      icon: const Icon(Icons.add),
-                      label: const Text('添加链接', textAlign: TextAlign.center),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 56),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 56),
+                        ),
+                        onPressed: () =>
+                            _add(context, dependencies, clipboard: true),
+                        icon: const Icon(Icons.content_paste),
+                        label: const Text(
+                          '从剪贴板添加',
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                      onPressed: () =>
-                          _add(context, dependencies, clipboard: true),
-                      icon: const Icon(Icons.content_paste),
-                      label: const Text('从剪贴板添加', textAlign: TextAlign.center),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

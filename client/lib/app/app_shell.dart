@@ -4,6 +4,7 @@ import 'dart:ui' show SemanticsAction;
 import 'package:flutter/material.dart';
 
 import 'bootstrap.dart';
+import 'floating_actions_page.dart';
 import '../core/models/app_failure.dart';
 import '../core/models/app_update.dart';
 import '../features/home/home_controller.dart';
@@ -146,7 +147,10 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.dependencies.updates,
+    listenable: Listenable.merge([
+      widget.dependencies.updates,
+      widget.dependencies.settings,
+    ]),
     builder: (context, _) => Scaffold(
       appBar:
           MediaQuery.viewInsetsOf(context).bottom > 0 &&
@@ -158,6 +162,17 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
               title: Text(['XDownloader', '下载', '收藏', '设置'][index]),
               actions: [
                 if (index == 0) HomeSourceAction(controller: home),
+                if (index == 0 &&
+                    !widget.dependencies.settings.value.privacyMode)
+                  IconButton(
+                    key: const Key('home_quick_privacy'),
+                    tooltip: '开启隐私模式',
+                    icon: const Icon(Icons.visibility_outlined),
+                    onPressed: () => runAction(
+                      context,
+                      () => widget.dependencies.settings.setPrivacyMode(true),
+                    ),
+                  ),
                 if (widget.dependencies.updates.result?.candidate != null)
                   IconButton(
                     tooltip: '发现新版本',
@@ -192,11 +207,10 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                     },
                     children: [
                       _PersistentPage(
-                        child: Column(
-                          children: [
-                            Expanded(child: HomeScreen(controller: home)),
-                            HomeComposer(controller: home),
-                          ],
+                        child: FloatingActionsPage(
+                          fadeKey: const Key('home_content_fade'),
+                          content: HomeScreen(controller: home),
+                          actions: HomeComposer(controller: home),
                         ),
                       ),
                       _PersistentPage(
@@ -208,16 +222,15 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                         ),
                       ),
                       _PersistentPage(
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: FavoritesScreen(
-                                dependencies: widget.dependencies,
-                                onOpen: _share,
-                              ),
-                            ),
-                            FavoritesActions(dependencies: widget.dependencies),
-                          ],
+                        child: FloatingActionsPage(
+                          fadeKey: const Key('favorites_content_fade'),
+                          content: FavoritesScreen(
+                            dependencies: widget.dependencies,
+                            onOpen: _share,
+                          ),
+                          actions: FavoritesActions(
+                            dependencies: widget.dependencies,
+                          ),
                         ),
                       ),
                       _PersistentPage(

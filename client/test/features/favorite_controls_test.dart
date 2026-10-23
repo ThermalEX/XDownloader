@@ -13,6 +13,70 @@ Future<void> openFilter(WidgetTester tester) async {
 }
 
 void main() {
+  for (final batch in [false, true]) {
+    testWidgets(
+      '${batch ? "batch" : "single"} favorite undo notice expires after six seconds',
+      (tester) => withAppFixture(tester, (fixture) async {
+        await fixture.favorites.add(
+          'https://x.com/a/status/123456',
+          title: '收藏一',
+        );
+        if (batch) {
+          await fixture.favorites.add(
+            'https://x.com/b/status/234567',
+            title: '收藏二',
+          );
+        }
+        final original = fixture.favorites.items
+            .map((f) => f.toJson())
+            .toList();
+        await tester.pumpWidget(
+          XDownloaderApp(dependencies: fixture.dependencies),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('nav_favorites')));
+        await tester.pumpAndSettle();
+
+        Future<void> remove() async {
+          if (batch) {
+            await tester.longPress(find.byKey(const Key('favorite_123456')));
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('全选'));
+            await tester.pumpAndSettle();
+            await tester.tap(find.byKey(const Key('favorite_delete_selected')));
+            await tester.pumpAndSettle();
+            await tester.tap(find.widgetWithText(FilledButton, '删除收藏'));
+          } else {
+            await tester.tap(find.byKey(const Key('favorite_remove_123456')));
+          }
+          await tester.pumpAndSettle();
+        }
+
+        final message = batch ? '已删除 2 项收藏' : '已取消收藏';
+        await remove();
+        expect(find.text(message), findsOneWidget);
+        expect(find.text('撤回'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+        expect(find.text('撤回'), findsOneWidget);
+        await tester.tap(find.text('撤回'));
+        await tester.pumpAndSettle();
+        expect(
+          fixture.favorites.items.map((f) => f.toJson()).toList(),
+          original,
+        );
+
+        await remove();
+        expect(find.text(message), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+        expect(find.text('撤回'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(find.text(message), findsNothing);
+        expect(find.text('撤回'), findsNothing);
+        expect(fixture.favorites.items, isEmpty);
+      }),
+    );
+  }
   testWidgets(
     'one filter icon applies sorting categories and resets to defaults',
     (tester) => withAppFixture(tester, (fixture) async {

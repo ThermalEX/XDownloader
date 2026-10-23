@@ -211,3 +211,16 @@ client/test/data/cover_metadata_test.dart
 client/test/features/cover_cache_screen_test.dart
 client/test/features/about_details_test.dart
 client/test/data/download_cover_test.dart
+client/lib/app/floating_actions_page.dart
+client/lib/core/security/privacy_password.dart
+client/lib/features/settings/privacy_password_dialog.dart
+client/test/data/favorite_author_test.dart
+client/test/data/privacy_password_test.dart
+client/test/features/favorite_details_test.dart
+client/test/features/privacy_settings_test.dart
+client/test/support/fake_privacy_passwords.dart
+client/integration_test/floating_privacy_test.dart
+client/lib/features/settings/privacy_unlock_screen.dart
+client/lib/platform/android_privacy_passwords.dart
+client/android/app/src/main/kotlin/com/xdl/app/NativePrivacyPasswords.kt
+client/test/platform/privacy_passwords_test.dart

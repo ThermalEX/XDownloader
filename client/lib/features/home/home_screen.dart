@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/app_shell.dart';
 import '../../app/branding_assets.dart';
 import '../../app/favorite_icon.dart';
+import '../../app/floating_actions_page.dart';
 import '../../core/parsing/post_link.dart';
 import '../settings/sources_screen.dart';
+import '../settings/privacy_password_dialog.dart';
+import '../../data/repositories/settings_repository.dart';
 import 'home_controller.dart';
 import 'media_result_view.dart';
 
@@ -21,13 +26,20 @@ class HomeScreen extends StatelessWidget {
         controller.result == null &&
             !controller.busy &&
             controller.error == null
-        ? _HomeEmptyState(
-            asset: appAvatarAsset(
-              controller.dependencies.settings.value.playfulAvatar,
-            ),
-          )
+        ? controller.dependencies.settings.value.privacyMode
+              ? _PrivateEmptyState(settings: controller.dependencies.settings)
+              : _HomeEmptyState(
+                  asset: appAvatarAsset(
+                    controller.dependencies.settings.value.playfulAvatar,
+                  ),
+                )
         : ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              24 + FloatingActionsPage.bottomInsetOf(context),
+            ),
             children: [
               if (controller.busy) const LinearProgressIndicator(),
               if (controller.error != null)
@@ -54,6 +66,58 @@ class HomeScreen extends StatelessWidget {
                 ),
             ],
           ),
+  );
+}
+
+class _PrivateEmptyState extends StatefulWidget {
+  const _PrivateEmptyState({required this.settings});
+  final SettingsRepository settings;
+  @override
+  State<_PrivateEmptyState> createState() => _PrivateEmptyStateState();
+}
+
+class _PrivateEmptyStateState extends State<_PrivateEmptyState> {
+  Timer? _reset;
+  int _taps = 0;
+  bool _opening = false;
+
+  @override
+  void dispose() {
+    _reset?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _tap() async {
+    if (_opening || !widget.settings.value.privacyMode) return;
+    _reset?.cancel();
+    if (++_taps < 3) {
+      _reset = Timer(const Duration(milliseconds: 500), () => _taps = 0);
+      return;
+    }
+    _taps = 0;
+    _opening = true;
+    try {
+      if (widget.settings.value.privacyPasswordHash.isEmpty) {
+        await widget.settings.setPrivacyMode(false);
+      } else {
+        await showPrivacyPasswordDialog(
+          context,
+          widget.settings,
+          unlockOnly: true,
+        );
+      }
+    } finally {
+      _opening = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => runAction(context, _tap),
+      child: const Padding(padding: EdgeInsets.all(24), child: Text('隐私模式已开启')),
+    ),
   );
 }
 
@@ -181,7 +245,10 @@ class _HomeComposerState extends State<HomeComposer>
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.controller,
+    listenable: Listenable.merge([
+      widget.controller,
+      widget.controller.dependencies.settings,
+    ]),
     builder: (context, _) {
       final home = widget.controller;
       if (_text.text != home.input) {
@@ -225,115 +292,121 @@ class _HomeComposerState extends State<HomeComposer>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (room >= 240) ...[
+              if (room >= 240 &&
+                  !home.dependencies.settings.value.privacyMode) ...[
                 Align(
                   alignment: Alignment.centerRight,
                   child: HomeFavoriteAction(home: home),
                 ),
                 const SizedBox(height: 9),
               ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextFieldTapRegion(
-                      child: InputDecorator(
-                        isFocused: _focus.hasFocus,
-                        isEmpty: home.input.isEmpty,
-                        decoration: InputDecoration(
-                          labelText: '视频链接',
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            16,
-                            4,
-                            4,
-                            4,
-                          ),
-                          filled: true,
-                          fillColor: colors.surfaceContainerLow,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final field = TextField(
-                                    key: const Key('home_link_input'),
-                                    focusNode: _focus,
-                                    scrollController: _scroll,
-                                    keyboardType: TextInputType.url,
-                                    autocorrect: false,
-                                    enableSuggestions: false,
-                                    controller: _text,
-                                    onChanged: home.setInput,
-                                    onTapOutside: (_) => _focus.unfocus(),
-                                    minLines: 1,
-                                    maxLines:
-                                        _focus.hasFocus &&
-                                            MediaQuery.sizeOf(context).height >=
-                                                500
-                                        ? 3
-                                        : 1,
-                                    textInputAction: TextInputAction.go,
-                                    onSubmitted: (_) => _parse(),
-                                    decoration: null,
-                                  );
-                                  final measure = TextPainter(
-                                    text: TextSpan(
-                                      text: home.input.replaceAll('\n', ' '),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
-                                    textDirection: TextDirection.ltr,
-                                    maxLines: 1,
-                                    textScaler: MediaQuery.textScalerOf(
-                                      context,
-                                    ),
-                                  )..layout();
-                                  final overflow =
-                                      !_focus.hasFocus &&
-                                      measure.width > constraints.maxWidth;
-                                  measure.dispose();
-                                  return ShaderMask(
-                                    blendMode: BlendMode.dstIn,
-                                    shaderCallback: (bounds) => LinearGradient(
-                                      colors: [
-                                        Colors.white,
-                                        Colors.white,
-                                        overflow
-                                            ? Colors.transparent
-                                            : Colors.white,
-                                      ],
-                                      stops: [0, .88, 1],
-                                    ).createShader(bounds),
-                                    child: field,
-                                  );
-                                },
-                              ),
+              FloatingActionAnchor(
+                key: const Key('home_input_row'),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextFieldTapRegion(
+                        child: InputDecorator(
+                          isFocused: _focus.hasFocus,
+                          isEmpty: home.input.isEmpty,
+                          decoration: InputDecoration(
+                            labelText: '视频链接',
+                            contentPadding: const EdgeInsets.fromLTRB(
+                              16,
+                              4,
+                              4,
+                              4,
                             ),
-                            suffix,
-                          ],
+                            filled: true,
+                            fillColor: colors.surfaceContainerLow,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final field = TextField(
+                                      key: const Key('home_link_input'),
+                                      focusNode: _focus,
+                                      scrollController: _scroll,
+                                      keyboardType: TextInputType.url,
+                                      autocorrect: false,
+                                      enableSuggestions: false,
+                                      controller: _text,
+                                      onChanged: home.setInput,
+                                      onTapOutside: (_) => _focus.unfocus(),
+                                      minLines: 1,
+                                      maxLines:
+                                          _focus.hasFocus &&
+                                              MediaQuery.sizeOf(context)
+                                                      .height >=
+                                                  500
+                                          ? 3
+                                          : 1,
+                                      textInputAction: TextInputAction.go,
+                                      onSubmitted: (_) => _parse(),
+                                      decoration: null,
+                                    );
+                                    final measure = TextPainter(
+                                      text: TextSpan(
+                                        text: home.input.replaceAll('\n', ' '),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      textDirection: TextDirection.ltr,
+                                      maxLines: 1,
+                                      textScaler: MediaQuery.textScalerOf(
+                                        context,
+                                      ),
+                                    )..layout();
+                                    final overflow =
+                                        !_focus.hasFocus &&
+                                        measure.width > constraints.maxWidth;
+                                    measure.dispose();
+                                    return ShaderMask(
+                                      blendMode: BlendMode.dstIn,
+                                      shaderCallback: (bounds) =>
+                                          LinearGradient(
+                                            colors: [
+                                              Colors.white,
+                                              Colors.white,
+                                              overflow
+                                                  ? Colors.transparent
+                                                  : Colors.white,
+                                            ],
+                                            stops: [0, .88, 1],
+                                          ).createShader(bounds),
+                                      child: field,
+                                    );
+                                  },
+                                ),
+                              ),
+                              suffix,
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Semantics(
-                    container: true,
-                    label: home.busy ? '取消解析' : '解析链接',
-                    excludeSemantics: true,
-                    button: true,
-                    child: IconButton.filledTonal(
-                      tooltip: home.busy ? '取消解析' : '解析',
-                      style: _homeActionStyle(context),
-                      onPressed: home.busy ? home.cancelParse : _parse,
-                      icon: Icon(home.busy ? Icons.close : Icons.search),
+                    const SizedBox(width: 12),
+                    Semantics(
+                      container: true,
+                      label: home.busy ? '取消解析' : '解析链接',
+                      excludeSemantics: true,
+                      button: true,
+                      child: IconButton.filledTonal(
+                        tooltip: home.busy ? '取消解析' : '解析',
+                        style: _homeActionStyle(context),
+                        onPressed: home.busy ? home.cancelParse : _parse,
+                        icon: Icon(home.busy ? Icons.close : Icons.search),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -361,8 +434,15 @@ class HomeFavoriteAction extends StatelessWidget {
   final HomeController home;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([home, home.dependencies.favorites]),
+    listenable: Listenable.merge([
+      home,
+      home.dependencies.favorites,
+      home.dependencies.settings,
+    ]),
     builder: (context, _) {
+      if (home.dependencies.settings.value.privacyMode) {
+        return const SizedBox.shrink();
+      }
       final post = PostLink.tryParse(home.input);
       final saved =
           post != null &&
@@ -377,12 +457,14 @@ class HomeFavoriteAction extends StatelessWidget {
         onPressed: post == null
             ? null
             : () => runAction(context, () async {
+                if (home.dependencies.settings.value.privacyMode) return;
                 if (saved) {
                   await home.dependencies.favorites.remove(post.postId);
                 } else {
                   await home.dependencies.favorites.add(
                     home.input,
                     title: home.result?.title,
+                    author: home.result?.author,
                     coverUrl: home.result?.thumbnail,
                   );
                 }

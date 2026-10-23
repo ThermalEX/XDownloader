@@ -170,53 +170,83 @@ class FavoriteRepository extends ChangeNotifier {
     );
   });
 
-  Future<bool> add(String input, {String? title, Uri? coverUrl}) => _queue.run(
-    () async {
-      final post = PostLink.tryParse(input);
-      if (post == null) {
-        throw const AppFailure(FailureKind.invalidLink, '请输入有效的 X 帖子链接');
+  Future<bool> add(
+    String input, {
+    String? title,
+    String? author,
+    Uri? coverUrl,
+  }) => _queue.run(() async {
+    final post = PostLink.tryParse(input);
+    if (post == null) {
+      throw const AppFailure(FailureKind.invalidLink, '请输入有效的 X 帖子链接');
+    }
+    final text = String.fromCharCodes((title ?? '').trim().runes.take(300));
+    final authorName = String.fromCharCodes(
+      (author ?? '').trim().runes.take(300),
+    );
+    final existing = _items.where((f) => f.postId == post.postId).firstOrNull;
+    if (existing != null) {
+      if ((existing.title.isEmpty && text.isNotEmpty) ||
+          (coverUrl != null && coverUrl != existing.coverUrl) ||
+          (authorName.isNotEmpty && authorName != existing.author)) {
+        await _save(
+          _items
+              .map(
+                (f) => f.postId == post.postId
+                    ? f.copyWith(
+                        title: existing.title.isEmpty ? text : null,
+                        coverUrl: coverUrl,
+                        author: authorName.isEmpty ? null : authorName,
+                      )
+                    : f,
+              )
+              .toList(),
+        );
       }
-      final text = String.fromCharCodes((title ?? '').trim().runes.take(300));
-      final existing = _items.where((f) => f.postId == post.postId).firstOrNull;
-      if (existing != null) {
-        if ((existing.title.isEmpty && text.isNotEmpty) ||
-            (coverUrl != null && coverUrl != existing.coverUrl)) {
-          await _save(
-            _items
-                .map(
-                  (f) => f.postId == post.postId
-                      ? f.copyWith(
-                          title: existing.title.isEmpty ? text : null,
-                          coverUrl: coverUrl,
-                        )
-                      : f,
-                )
-                .toList(),
-          );
-        }
-        return false;
-      }
-      await _save([
-        FavoriteLink(
-          postId: post.postId,
-          url: post.canonicalUrl,
-          title: text,
-          createdAt: DateTime.now().toUtc(),
-          coverUrl: coverUrl,
-        ),
-        ..._items,
-      ]);
-      return true;
-    },
-  );
-  Future<void> rememberCover(String postId, Uri? url) => _queue.run(() async {
-    if (url == null ||
-        !_items.any((f) => f.postId == postId && f.coverUrl != url)) {
+      return false;
+    }
+    await _save([
+      FavoriteLink(
+        postId: post.postId,
+        url: post.canonicalUrl,
+        title: text,
+        createdAt: DateTime.now().toUtc(),
+        coverUrl: coverUrl,
+        author: authorName.isEmpty ? null : authorName,
+      ),
+      ..._items,
+    ]);
+    return true;
+  });
+  Future<void> rememberCover(String postId, Uri? url) =>
+      rememberMetadata(postId, coverUrl: url);
+
+  Future<void> rememberMetadata(
+    String postId, {
+    Uri? coverUrl,
+    String? author,
+  }) => _queue.run(() async {
+    final authorName = String.fromCharCodes(
+      (author ?? '').trim().runes.take(300),
+    );
+    if (!_items.any(
+      (f) =>
+          f.postId == postId &&
+          ((coverUrl != null && f.coverUrl != coverUrl) ||
+              (authorName.isNotEmpty && f.author != authorName)),
+    )) {
       return;
     }
     await _save(
       _items
-          .map((f) => f.postId == postId ? f.copyWith(coverUrl: url) : f)
+          .map(
+            (f) => f.postId == postId
+                ? f.copyWith(
+                    coverUrl: coverUrl,
+                    author: authorName.isEmpty ? null : authorName,
+                  )
+                : f,
+          )
           .toList(),
     );
   });

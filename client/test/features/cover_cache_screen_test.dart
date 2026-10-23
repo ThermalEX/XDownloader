@@ -44,6 +44,63 @@ class UiCoverCache extends CoverCacheRepository {
 }
 
 void main() {
+  for (final brightness in Brightness.values) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+        'cache rows share width and height with single-line text at 320dp ${brightness.name} ${scale}x',
+        (tester) => withAppFixture(tester, (f) async {
+          tester.view.physicalSize = const Size(320, 720);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final cache = UiCoverCache(f.settings)..size = 1234567890123456789;
+          addTearDown(cache.dispose);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ThemeData(brightness: brightness),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: CoverCacheScreen(cache: cache),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final cards = find.byType(Card);
+          expect(cards, findsNWidgets(2));
+          final firstCard = tester.getRect(cards.at(0));
+          final secondCard = tester.getRect(cards.at(1));
+          expect(firstCard.left, closeTo(16, .1));
+          expect(firstCard.right, closeTo(304, .1));
+          expect(secondCard.left, closeTo(firstCard.left, .1));
+          expect(secondCard.right, closeTo(firstCard.right, .1));
+          final rows = [
+            find.widgetWithText(ListTile, '已用缓存'),
+            find.byKey(const Key('cover_cache_limit')),
+            find.byKey(const Key('cover_cache_view')),
+            find.byKey(const Key('cover_cache_clear')),
+          ];
+          final firstRow = tester.getRect(rows.first);
+          for (final row in rows) {
+            final bounds = tester.getRect(row);
+            expect(bounds.left, closeTo(firstCard.left, .1));
+            expect(bounds.right, closeTo(firstCard.right, .1));
+            expect(bounds.height, closeTo(firstRow.height, .1));
+          }
+          for (final row in rows) {
+            final tile = tester.widget<ListTile>(row);
+            for (final text in [tile.title, tile.subtitle].whereType<Text>()) {
+              expect(text.maxLines, 1);
+              expect(text.softWrap, false);
+              expect(text.overflow, TextOverflow.fade);
+            }
+          }
+          expect(tester.takeException(), isNull);
+        }),
+      );
+    }
+  }
   testWidgets(
     'cache management saves custom limits, shows usage and clears only covers',
     (tester) => withAppFixture(tester, (f) async {

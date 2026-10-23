@@ -8,20 +8,27 @@ class FavoriteLink {
     required this.createdAt,
     this.category = '',
     this.coverUrl,
+    this.author,
   });
   final String postId, title, category;
   final Uri url;
   final DateTime createdAt;
   final Uri? coverUrl;
-  FavoriteLink copyWith({String? title, String? category, Uri? coverUrl}) =>
-      FavoriteLink(
-        postId: postId,
-        url: url,
-        title: title ?? this.title,
-        category: category ?? this.category,
-        coverUrl: coverUrl ?? this.coverUrl,
-        createdAt: createdAt,
-      );
+  final String? author;
+  FavoriteLink copyWith({
+    String? title,
+    String? category,
+    Uri? coverUrl,
+    String? author,
+  }) => FavoriteLink(
+    postId: postId,
+    url: url,
+    title: title ?? this.title,
+    category: category ?? this.category,
+    coverUrl: coverUrl ?? this.coverUrl,
+    author: author ?? this.author,
+    createdAt: createdAt,
+  );
   Map<String, Object?> toJson() => {
     'postId': postId,
     'url': url.toString(),
@@ -29,6 +36,7 @@ class FavoriteLink {
     'category': category,
     'createdAt': createdAt.toUtc().toIso8601String(),
     if (coverUrl != null) 'coverUrl': coverUrl.toString(),
+    if (author != null) 'author': author,
   };
   factory FavoriteLink.fromJson(Map<String, Object?> data) {
     final raw = data['url'] as String;
@@ -46,6 +54,7 @@ class FavoriteLink {
       postId: post.postId,
       url: post.canonicalUrl,
       title: data['title'] as String,
+      author: data['author'] as String?,
       category: category,
       createdAt: DateTime.parse(data['createdAt'] as String),
       coverUrl: data['coverUrl'] == null

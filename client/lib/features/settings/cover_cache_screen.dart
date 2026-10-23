@@ -65,59 +65,93 @@ class CoverCacheScreen extends StatelessWidget {
     body: SafeArea(
       child: ListenableBuilder(
         listenable: cache,
-        builder: (context, _) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            SettingsPanel(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const SettingsIcon(Icons.photo_library_outlined),
-                    title: const Text('已用缓存'),
-                    subtitle: Text(
-                      '${cacheSize(cache.usedBytes)} · ${cache.entries.length} 张封面',
-                    ),
-                  ),
-                  ListTile(
-                    key: const Key('cover_cache_limit'),
-                    leading: const SettingsIcon(Icons.data_usage),
-                    title: const Text('缓存大小上限'),
-                    subtitle: Text(
-                      cache.limitMb == 0 ? '不保留磁盘缓存' : '${cache.limitMb} MB',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _limit(context),
-                  ),
-                  ListTile(
-                    key: const Key('cover_cache_view'),
-                    leading: const SettingsIcon(Icons.grid_view_outlined),
-                    title: const Text('查看缓存'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => _CachedCovers(cache: cache),
+        builder: (context, _) => ListTileTheme.merge(
+          minTileHeight: settingsRowHeight(context),
+          minVerticalPadding: 8,
+          titleTextStyle: Theme.of(context).textTheme.titleMedium,
+          subtitleTextStyle: Theme.of(context).textTheme.bodyMedium,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              SettingsPanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ListTile(
+                      leading: const SettingsIcon(Icons.photo_library_outlined),
+                      title: const Text(
+                        '已用缓存',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
+                      ),
+                      subtitle: Text(
+                        '${cacheSize(cache.usedBytes)} · ${cache.entries.length} 张封面',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
                       ),
                     ),
+                    ListTile(
+                      key: const Key('cover_cache_limit'),
+                      leading: const SettingsIcon(Icons.data_usage),
+                      title: const Text(
+                        '缓存大小上限',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
+                      ),
+                      subtitle: Text(
+                        cache.limitMb == 0 ? '不保留磁盘缓存' : '${cache.limitMb} MB',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _limit(context),
+                    ),
+                    ListTile(
+                      key: const Key('cover_cache_view'),
+                      leading: const SettingsIcon(Icons.grid_view_outlined),
+                      title: const Text(
+                        '查看缓存',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => _CachedCovers(cache: cache),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SettingsPanel(
+                child: ListTile(
+                  key: const Key('cover_cache_clear'),
+                  leading: const SettingsIcon(Icons.cleaning_services_outlined),
+                  title: const Text(
+                    '清理封面缓存',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.fade,
                   ),
-                ],
+                  onTap: () => runAction(context, () async {
+                    await cache.clear();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('已清理封面缓存')));
+                    }
+                  }),
+                ),
               ),
-            ),
-            SettingsPanel(
-              child: ListTile(
-                key: const Key('cover_cache_clear'),
-                leading: const SettingsIcon(Icons.cleaning_services_outlined),
-                title: const Text('清理封面缓存'),
-                onTap: () => runAction(context, () async {
-                  await cache.clear();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('已清理封面缓存')));
-                  }
-                }),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

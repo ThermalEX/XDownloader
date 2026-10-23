@@ -33,7 +33,7 @@ void main() {
     }),
   );
   testWidgets(
-    'link collapses after editing and heart reserves footer space',
+    'link collapses after editing and heart floats inside the content viewport',
     (tester) => withAppFixture(tester, (fixture) async {
       await tester.pumpWidget(
         XDownloaderApp(dependencies: fixture.dependencies),
@@ -54,7 +54,11 @@ void main() {
       final heart = find.byKey(const Key('favorite_current'));
       expect(
         tester.getTopLeft(heart).dy,
-        greaterThanOrEqualTo(tester.getBottomLeft(content).dy),
+        greaterThan(tester.getTopLeft(content).dy),
+      );
+      expect(
+        tester.getBottomLeft(heart).dy,
+        lessThan(tester.getBottomLeft(content).dy),
       );
       expect(
         tester.getBottomLeft(heart).dy,

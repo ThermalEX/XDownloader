@@ -14,6 +14,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     internal val shares = NativeShareGateway()
     private val executor = Executors.newSingleThreadExecutor()
+    private val privacyExecutor = Executors.newSingleThreadExecutor()
     private val playbackControls by lazy { PlaybackWindowControls(this) }
     private val waitingForPermission = mutableListOf<Pair<MethodCall, MethodChannel.Result>>()
     private val notificationResults = mutableListOf<MethodChannel.Result>()
@@ -47,6 +48,17 @@ class MainActivity : FlutterActivity() {
             }
     }
     private fun dispatch(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method == "privacyDerive") {
+            privacyExecutor.execute {
+                try {
+                    val args = call.arguments as Map<*, *>
+                    result.success(NativePrivacyPasswords.derive(args["password"] as String, args["salt"] as ByteArray))
+                } catch (e: Exception) {
+                    result.error("privacy", "Unable to derive privacy verifier", null)
+                }
+            }
+            return
+        }
         if (call.method.startsWith("update")) {
             dispatchUpdate(call, result)
             return
@@ -124,6 +136,7 @@ class MainActivity : FlutterActivity() {
         }
     }
     override fun onDestroy() {
+        privacyExecutor.shutdown()
         playbackControls.end()
         super.onDestroy()
     }

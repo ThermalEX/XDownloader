@@ -12,7 +12,10 @@ import '../../core/naming/file_naming.dart';
 import '../../platform/download_backend.dart';
 
 class HomeController extends ChangeNotifier {
-  HomeController(this.dependencies);
+  HomeController(this.dependencies)
+    : _privacyMode = dependencies.settings.value.privacyMode {
+    dependencies.settings.addListener(_privacyChanged);
+  }
   final AppDependencies dependencies;
   String input = '';
   MediaResult? result;
@@ -22,11 +25,19 @@ class HomeController extends ChangeNotifier {
   bool _disposed = false, _visible = true;
   String? _lastClipboard;
   ParseCancellation? _cancellation;
+  bool _privacyMode;
+  void _privacyChanged() {
+    final enabled = dependencies.settings.value.privacyMode;
+    if (enabled && !_privacyMode) clear();
+    _privacyMode = enabled;
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
 
   void setInput(String value) {
+    if (_disposed) return;
     cancelParse();
     input = value;
     result = null;
@@ -62,7 +73,11 @@ class HomeController extends ChangeNotifier {
           // Metadata only; viewing favorites loads the actual cover lazily.
           unawaited(
             dependencies.favorites
-                .rememberCover(value.post.postId, value.thumbnail)
+                .rememberMetadata(
+                  value.post.postId,
+                  coverUrl: value.thumbnail,
+                  author: value.author,
+                )
                 .catchError((_) {}),
           );
         }
@@ -107,7 +122,9 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> paste() async {
-    if (_disposed || !_visible) return;
+    if (_disposed || !_visible) {
+      return;
+    }
     final generation = _generation;
     final text = await dependencies.readClipboard();
     if (_disposed || !_visible || generation != _generation) return;
@@ -167,6 +184,7 @@ class HomeController extends ChangeNotifier {
 
   @override
   void dispose() {
+    dependencies.settings.removeListener(_privacyChanged);
     _disposed = true;
     ++_generation;
     _cancellation?.cancel();

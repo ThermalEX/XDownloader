@@ -323,6 +323,10 @@ void main() {
       restored.dispose();
       navigator.pop();
       await tester.pumpAndSettle();
+      expect(find.text('隐私模式已开启'), findsOneWidget);
+      expect(find.byKey(const Key('home_empty_art')), findsNothing);
+      await f.settings.setPrivacyMode(false);
+      await tester.pumpAndSettle();
       expect(imageAsset(tester, 'home_empty_art'), contains(playful));
       final opacity = tester.widget<Opacity>(
         find

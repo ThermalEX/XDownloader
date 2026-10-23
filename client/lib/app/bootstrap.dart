@@ -9,6 +9,7 @@ import '../data/repositories/favorite_repository.dart';
 import '../data/repositories/update_repository.dart';
 import '../data/updates/github_release_client.dart';
 import '../platform/android_update_backend.dart';
+import '../platform/android_privacy_passwords.dart';
 import '../data/legacy_migration.dart';
 import '../platform/share_gateway.dart';
 import '../core/parsing/parse_client.dart';
@@ -52,7 +53,11 @@ Future<AppDependencies> bootstrap() async {
   final path = await callPlatform('supportDirectory', {}) as String;
   final store = SnapshotStore(Directory('$path/flutter_data'));
   final migration = await LegacyMigration(store, LegacyDataGateway()).run();
-  final sources = SourceRepository(store), settings = SettingsRepository(store);
+  final sources = SourceRepository(store);
+  final settings = SettingsRepository(
+    store,
+    passwords: AndroidPrivacyPasswords(),
+  );
   final favorites = FavoriteRepository(store);
   final backend = AndroidDownloadBackend();
   final cachePath = await callPlatform('cacheDirectory', {}) as String;

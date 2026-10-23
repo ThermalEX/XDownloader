@@ -1,4 +1,5 @@
 import '../naming/file_naming.dart';
+import '../security/privacy_password.dart';
 
 enum AppThemeMode { system, light, dark }
 
@@ -9,6 +10,7 @@ class AppSettings {
     this.useDynamicColor = false,
     this.autoClipboard = true,
     this.privacyMode = false,
+    this.privacyPasswordHash = '',
     this.playfulAvatar = false,
     this.coverCacheLimitMb = 100,
     this.useOriginalFileName = false,
@@ -21,12 +23,14 @@ class AppSettings {
   final bool playfulAvatar;
   final int coverCacheLimitMb;
   final String fileNameTemplate;
+  final String privacyPasswordHash;
   AppSettings copyWith({
     AppThemeMode? themeMode,
     int? seedColor,
     bool? useDynamicColor,
     bool? autoClipboard,
     bool? privacyMode,
+    String? privacyPasswordHash,
     bool? playfulAvatar,
     int? coverCacheLimitMb,
     bool? useOriginalFileName,
@@ -37,6 +41,7 @@ class AppSettings {
     useDynamicColor: useDynamicColor ?? this.useDynamicColor,
     autoClipboard: autoClipboard ?? this.autoClipboard,
     privacyMode: privacyMode ?? this.privacyMode,
+    privacyPasswordHash: privacyPasswordHash ?? this.privacyPasswordHash,
     playfulAvatar: playfulAvatar ?? this.playfulAvatar,
     coverCacheLimitMb: coverCacheLimitMb ?? this.coverCacheLimitMb,
     useOriginalFileName: useOriginalFileName ?? this.useOriginalFileName,
@@ -48,6 +53,7 @@ class AppSettings {
     'useDynamicColor': useDynamicColor,
     'autoClipboard': autoClipboard,
     'privacyMode': privacyMode,
+    'privacyPasswordHash': privacyPasswordHash,
     'playfulAvatar': playfulAvatar,
     'coverCacheLimitMb': coverCacheLimitMb,
     'useOriginalFileName': useOriginalFileName,
@@ -63,12 +69,21 @@ class AppSettings {
     useDynamicColor: m['useDynamicColor'] == true,
     autoClipboard: m['autoClipboard'] != false,
     privacyMode: m['privacyMode'] == true,
+    privacyPasswordHash: _passwordHash(m['privacyPasswordHash']),
     playfulAvatar: m['playfulAvatar'] == true,
     coverCacheLimitMb: _cacheLimit(m['coverCacheLimitMb']),
     useOriginalFileName: m['useOriginalFileName'] == true,
     fileNameTemplate:
         m['fileNameTemplate'] as String? ?? FileNaming.defaultTemplate,
   );
+}
+
+String _passwordHash(Object? value) {
+  if (value == null) return '';
+  if (value is! String || !PrivacyPasswords.validHash(value)) {
+    throw const FormatException('Invalid privacy password verifier');
+  }
+  return value;
 }
 
 int _cacheLimit(Object? value) {
