@@ -21,7 +21,7 @@ class HomeController extends ChangeNotifier {
   MediaResult? result;
   bool busy = false;
   AppFailure? error;
-  int _generation = 0;
+  int _generation = 0, _clipboardRevision = 0;
   bool _disposed = false, _visible = true;
   String? _lastClipboard;
   ParseCancellation? _cancellation;
@@ -99,6 +99,18 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> acceptSharedText(String text) => parse(text);
+
+  /// Seed deduplication without restoring a query on a fresh launch.
+  Future<void> initializeClipboard() async {
+    if (_disposed || !dependencies.settings.value.autoClipboard) return;
+    final revision = _clipboardRevision;
+    final text = await dependencies.readClipboard();
+    // An explicit paste during the read owns the newer clipboard baseline.
+    if (!_disposed && revision == _clipboardRevision && text != null) {
+      _lastClipboard = PostLink.tryParse(text)?.canonicalUrl.toString();
+    }
+  }
+
   Future<void> onResumed() async {
     if (_disposed ||
         !_visible ||
@@ -117,6 +129,7 @@ class HomeController extends ChangeNotifier {
     }
     final canonical = PostLink.tryParse(text)?.canonicalUrl.toString();
     if (canonical == null || canonical == _lastClipboard) return;
+    _clipboardRevision++;
     _lastClipboard = canonical;
     await parse(text);
   }
@@ -128,9 +141,12 @@ class HomeController extends ChangeNotifier {
     final generation = _generation;
     final text = await dependencies.readClipboard();
     if (_disposed || !_visible || generation != _generation) return;
-    if (text == null || PostLink.tryParse(text) == null) {
+    final post = PostLink.tryParse(text ?? '');
+    if (text == null || post == null) {
       throw const AppFailure(FailureKind.invalidLink, '剪贴板中没有有效的 X 帖子链接');
     }
+    _clipboardRevision++;
+    _lastClipboard = post.canonicalUrl.toString();
     await parse(text);
   }
 
@@ -166,8 +182,6 @@ class HomeController extends ChangeNotifier {
   }
 
   void clear() {
-    _lastClipboard =
-        PostLink.tryParse(input)?.canonicalUrl.toString() ?? _lastClipboard;
     cancelParse();
     input = '';
     result = null;

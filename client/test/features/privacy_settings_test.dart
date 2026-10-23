@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xdownloader/app/app.dart';
 import 'package:xdownloader/data/repositories/settings_repository.dart';
 import 'package:xdownloader/features/settings/application_settings_screen.dart';
+import 'package:xdownloader/features/settings/privacy_unlock_screen.dart';
 
 import '../support/fake_privacy_passwords.dart';
 import '../support/app_fixture.dart';
@@ -27,6 +28,50 @@ Future<SettingsRepository> showPrivacySettings(
 }
 
 void main() {
+  testWidgets('PIN controls scale with phone width and stay centered', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = await showPrivacySettings(tester);
+    var previousSize = 0.0;
+    for (final width in [320.0, 400.0, 432.0]) {
+      tester.view.physicalSize = Size(width, 890);
+      await tester.pumpWidget(
+        MaterialApp(home: PrivacyUnlockScreen(settings: settings)),
+      );
+      await tester.pumpAndSettle();
+      final center = tester.getCenter(find.byType(Scaffold)).dx;
+      for (final control in [
+        find.text('输入隐私 PIN'),
+        find.text('取消'),
+        find.byKey(const Key('privacy_pin_2')),
+        find.byKey(const Key('privacy_pin_0')),
+      ]) {
+        expect(tester.getCenter(control).dx, closeTo(center, .5));
+      }
+      final digit = tester.getSize(find.byKey(const Key('privacy_pin_2')));
+      expect(digit.width, inInclusiveRange(width * .21, width * .26));
+      expect(digit.width, closeTo(digit.height, .5));
+      expect(digit.width, greaterThan(previousSize));
+      previousSize = digit.width;
+      final left = find.byKey(const Key('privacy_pin_delete'));
+      final right = find.byKey(const Key('privacy_pin_confirm'));
+      expect(tester.getSize(left), digit);
+      expect(tester.getSize(right), digit);
+      expect(
+        (tester.getCenter(left).dx + tester.getCenter(right).dx) / 2,
+        closeTo(center, .5),
+      );
+      expect(tester.takeException(), isNull);
+    }
+    final cancel = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, '取消'),
+    );
+    expect(cancel.style?.backgroundColor?.resolve({})?.a, greaterThan(0));
+  });
+
   testWidgets('optional privacy password can be created changed and removed', (
     tester,
   ) async {
@@ -331,14 +376,17 @@ void main() {
       );
       await tester.pumpAndSettle();
       final hint = find.text('隐私模式已开启');
-      await tester.tap(hint);
+      // Blank space well outside the text and its former 24dp padding is tappable.
+      final target = tester.getCenter(hint) + const Offset(120, -80);
+      expect(tester.getRect(hint).contains(target), isFalse);
+      await tester.tapAt(target);
       await tester.pump(const Duration(milliseconds: 600));
       for (var i = 0; i < 2; i++) {
-        await tester.tap(hint);
+        await tester.tapAt(target);
         await tester.pump(const Duration(milliseconds: 60));
       }
       expect(find.byKey(const Key('privacy_unlock_screen')), findsNothing);
-      await tester.tap(hint);
+      await tester.tapAt(target);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('privacy_unlock_screen')), findsOneWidget);
       await tester.ensureVisible(find.text('取消'));

@@ -37,7 +37,13 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    repo.setForegroundVisible(true);
+    repo.addListener(_acknowledgeReady);
+    repo.setForegroundVisible(
+      WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      owner: this,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _acknowledgeReady());
     if (widget.check) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_check());
@@ -53,13 +59,27 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
     }
   }
 
+  void _acknowledgeReady() {
+    if (mounted &&
+        ModalRoute.of(context)?.isCurrent == true &&
+        (WidgetsBinding.instance.lifecycleState == null ||
+            WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed)) {
+      repo.acknowledgeInstallPrompt();
+    }
+  }
+
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) =>
-      repo.setForegroundVisible(state == AppLifecycleState.resumed);
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    repo.setForegroundVisible(state == AppLifecycleState.resumed, owner: this);
+    if (state == AppLifecycleState.resumed) _acknowledgeReady();
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    repo.setForegroundVisible(false);
+    repo.removeListener(_acknowledgeReady);
+    repo.setForegroundVisible(false, owner: this);
     super.dispose();
   }
 
@@ -152,7 +172,12 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
                       ),
                       label: Text(label),
                     );
-                    if (candidate == null) return browser;
+                    if (candidate == null) {
+                      return Align(
+                        alignment: Alignment.centerRight,
+                        child: browser,
+                      );
+                    }
                     return Row(
                       children: [
                         Expanded(
@@ -173,7 +198,10 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
                           ),
                         ),
                         Flexible(
-                          child: Tooltip(message: '前往发布页下载', child: browser),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Tooltip(message: '前往发布页下载', child: browser),
+                          ),
                         ),
                       ],
                     );
@@ -218,6 +246,27 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
 
 String _size(int value) => '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
 
+Future<void> showUpdateInstallDialog(
+  BuildContext context,
+  UpdateRepository repository,
+) => showDialog<void>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: const Text('更新已下载'),
+    scrollable: true,
+    content: ListenableBuilder(
+      listenable: repository,
+      builder: (context, _) => _UpdateTransferView(repository: repository),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('稍后'),
+      ),
+    ],
+  ),
+);
+
 class _UpdateTransferView extends StatelessWidget {
   const _UpdateTransferView({required this.repository});
   final UpdateRepository repository;
@@ -225,9 +274,7 @@ class _UpdateTransferView extends StatelessWidget {
   Widget build(BuildContext context) {
     final repo = repository;
     final state = repo.transfer;
-    final ready =
-        state.phase == UpdatePhase.ready ||
-        state.phase == UpdatePhase.permissionRequired;
+    final ready = state.ready;
     final total = state.totalBytes;
     final fraction = total == null || total <= 0
         ? null

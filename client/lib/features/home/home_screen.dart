@@ -112,11 +112,11 @@ class _PrivateEmptyStateState extends State<_PrivateEmptyState> {
   }
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => runAction(context, _tap),
-      child: const Padding(padding: EdgeInsets.all(24), child: Text('隐私模式已开启')),
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => runAction(context, _tap),
+    child: const Center(
+      child: Padding(padding: EdgeInsets.all(24), child: Text('隐私模式已开启')),
     ),
   );
 }

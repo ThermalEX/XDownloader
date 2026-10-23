@@ -32,6 +32,90 @@ Future<void> checkManually(WidgetTester tester) async {
 
 void main() {
   testWidgets(
+    'recovered ready package waits for foreground and requires installation tap',
+    (tester) => withAppFixture(tester, (f) async {
+      await f.updates.setShowUpdatePrompt(false);
+      f.updateBackend.transfer = UpdateTransfer(
+        candidateId: fixtureUpdate().candidateId,
+        versionName: '2.5.0',
+        phase: UpdatePhase.ready,
+      );
+      await f.updates.refreshTransfer();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      expect(find.text('更新已下载'), findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('更新已下载'), findsOneWidget);
+      expect(f.updateBackend.calls, isEmpty);
+      f.updateBackend.transfer = UpdateTransfer(
+        candidateId: fixtureUpdate().candidateId,
+        versionName: '2.5.0',
+        phase: UpdatePhase.permissionRequired,
+      );
+      await tester.tap(find.text('继续安装'));
+      await tester.pumpAndSettle();
+      expect(f.updateBackend.calls, ['install:${fixtureUpdate().candidateId}']);
+      expect(find.text('请允许安装本应用提供的更新，然后继续安装'), findsOneWidget);
+    }),
+  );
+  testWidgets(
+    'ready package in the open update window does not produce another prompt',
+    (tester) => withAppFixture(tester, (f) async {
+      await f.updates.setAutoCheck(true);
+      f.releaseClient.respond = (_) async => availableUpdate();
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('下载更新'));
+      await tester.pumpAndSettle();
+      f.updateBackend.transfer = UpdateTransfer(
+        candidateId: fixtureUpdate().candidateId,
+        versionName: '2.5.0',
+        phase: UpdatePhase.ready,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('继续安装'), findsOneWidget);
+      await tester.tap(find.text('关闭'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, ['enqueue']);
+    }),
+  );
+  testWidgets(
+    'download finishing under a subpage prompts once after returning',
+    (tester) => withAppFixture(tester, (f) async {
+      f.releaseClient.respond = (_) async => availableUpdate();
+      await f.updates.check();
+      await f.updates.download();
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('子页面')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      f.updateBackend.transfer = UpdateTransfer(
+        candidateId: fixtureUpdate().candidateId,
+        versionName: '2.5.0',
+        phase: UpdatePhase.ready,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('更新已下载'), findsOneWidget);
+    }),
+  );
+  testWidgets(
     'startup result waits for foreground and prompts exactly once on return',
     (tester) => withAppFixture(tester, (f) async {
       final pending = Completer<ReleaseCheck>();
@@ -94,6 +178,18 @@ void main() {
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.text('XDownloader 2.5.0'), findsOneWidget);
       expect(find.text('不再提醒'), findsOneWidget);
+      final releasePage = tester.getRect(
+        find.byKey(const Key('update_dialog_release_page')),
+      );
+      final row = tester.getRect(
+        find
+            .ancestor(
+              of: find.byKey(const Key('update_dialog_release_page')),
+              matching: find.byType(Row),
+            )
+            .first,
+      );
+      expect(releasePage.right, closeTo(row.right, 1));
       expect(f.updateBackend.calls, isEmpty);
       await tester.tap(find.text('下载更新'));
       await tester.pumpAndSettle();
@@ -115,6 +211,21 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
       expect(f.updateBackend.calls, ['enqueue']);
       expect(f.updates.transfer.phase, UpdatePhase.running);
+      f.updateBackend.transfer = UpdateTransfer(
+        candidateId: fixtureUpdate().candidateId,
+        versionName: '2.5.0',
+        phase: UpdatePhase.ready,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('更新已下载'), findsOneWidget);
+      expect(f.updateBackend.calls, ['enqueue']);
+      await tester.tap(find.text('稍后'));
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('更新已下载'), findsNothing);
     }),
   );
   for (final invalidate in ['suppress', 'manual check']) {

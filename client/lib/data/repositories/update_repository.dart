@@ -35,8 +35,22 @@ class UpdateRepository extends ChangeNotifier {
   bool _disposed = false, _refreshing = false;
   int _generation = 0, _transferGeneration = 0;
   Timer? _timer;
+  final _foregroundOwners = <Object>{};
+  String? _promptedInstallId;
+  bool get needsInstallPrompt =>
+      transfer.ready &&
+      transfer.candidateId != null &&
+      transfer.candidateId != _promptedInstallId;
+
+  void acknowledgeInstallPrompt() {
+    if (transfer.ready) _promptedInstallId = transfer.candidateId;
+  }
+
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (!_disposed) {
+      _syncPolling();
+      notifyListeners();
+    }
   }
 
   AppFailure _failure(Object e) => e is AppFailure
@@ -170,6 +184,7 @@ class UpdateRepository extends ChangeNotifier {
       throw const AppFailure(FailureKind.cancelled, '已有更新下载，请先完成或取消');
     }
     await backend.enqueue(candidate, candidate.assets.first);
+    _promptedInstallId = null;
     _transfer = await backend.snapshot();
   });
   Future<void> cancelDownload() => _operate(() async {
@@ -180,11 +195,7 @@ class UpdateRepository extends ChangeNotifier {
   });
   Future<void> install() => _operate(() async {
     final id = transfer.candidateId;
-    if (id == null ||
-        !const [
-          UpdatePhase.ready,
-          UpdatePhase.permissionRequired,
-        ].contains(transfer.phase)) {
+    if (id == null || !transfer.ready) {
       throw const AppFailure(FailureKind.cancelled, '请先下载更新');
     }
     _transfer = await backend.requestInstall(id);
@@ -209,15 +220,27 @@ class UpdateRepository extends ChangeNotifier {
     }
   }
 
-  void setForegroundVisible(bool visible) {
-    _timer?.cancel();
-    _timer = null;
-    if (visible && !_disposed) {
+  void setForegroundVisible(bool visible, {Object? owner}) {
+    if (_disposed) return;
+    if (visible) {
+      _foregroundOwners.add(owner ?? this);
       unawaited(refreshTransfer());
-      _timer = Timer.periodic(
+    } else {
+      _foregroundOwners.remove(owner ?? this);
+    }
+    _syncPolling();
+  }
+
+  void _syncPolling() {
+    // Only observe native work while the app is visible and a download is pending.
+    if (_foregroundOwners.isNotEmpty && transfer.active && !transfer.ready) {
+      _timer ??= Timer.periodic(
         const Duration(seconds: 2),
         (_) => unawaited(refreshTransfer()),
       );
+    } else {
+      _timer?.cancel();
+      _timer = null;
     }
   }
 

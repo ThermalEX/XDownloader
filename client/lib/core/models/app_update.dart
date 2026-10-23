@@ -216,6 +216,8 @@ class UpdateTransfer {
   final UpdatePhase phase;
   final int bytes;
   final int? totalBytes;
+  bool get ready =>
+      phase == UpdatePhase.ready || phase == UpdatePhase.permissionRequired;
   bool get active => const [
     UpdatePhase.queued,
     UpdatePhase.running,

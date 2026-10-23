@@ -27,12 +27,21 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   final _pages = _NestedScrollPageController();
   ReleaseCheck? _pendingStartup;
   bool _promptScheduled = false;
+  bool _backgrounded = false;
+  bool _homeInitialized = false;
+  bool _resumeHomePending = false;
   int index = 0;
   @override
   void initState() {
     super.initState();
     home = HomeController(widget.dependencies);
     WidgetsBinding.instance.addObserver(this);
+    widget.dependencies.updates.addListener(_scheduleUpdatePrompt);
+    widget.dependencies.updates.setForegroundVisible(
+      WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      owner: this,
+    );
     unawaited(_listen());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -46,37 +55,52 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     final result = await updates.check(automatic: true);
     if (!mounted || result?.candidate == null) return;
     _pendingStartup = result;
-    _scheduleStartupPrompt();
+    _scheduleUpdatePrompt();
   }
 
-  void _scheduleStartupPrompt() {
-    if (!mounted || _pendingStartup == null || _promptScheduled) return;
+  void _scheduleUpdatePrompt() {
+    if (!mounted ||
+        (_pendingStartup == null &&
+            !widget.dependencies.updates.needsInstallPrompt) ||
+        _promptScheduled) {
+      return;
+    }
     _promptScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _promptScheduled = false;
-      _showPendingStartupPrompt();
+      _showPendingUpdatePrompt();
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  void _showPendingStartupPrompt() {
-    if (!mounted || _pendingStartup == null) return;
+  void _showPendingUpdatePrompt() {
+    if (!mounted) return;
     final updates = widget.dependencies.updates;
+    if (ModalRoute.of(context)?.isCurrent != true ||
+        (WidgetsBinding.instance.lifecycleState != null &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed)) {
+      return;
+    }
+    if (updates.needsInstallPrompt) {
+      updates.acknowledgeInstallPrompt();
+      _pendingStartup = null;
+      unawaited(showUpdateInstallDialog(context, updates));
+      return;
+    }
+    if (_pendingStartup == null) return;
+    if (updates.transfer.active) {
+      _pendingStartup = null;
+      return;
+    }
     if (!updates.preferences.autoCheck ||
         !updates.preferences.showUpdatePrompt ||
         !identical(_pendingStartup, updates.result)) {
       _pendingStartup = null;
       return;
     }
-    // Defer while another route or system window covers the startup screen.
-    // A newer check or channel change invalidates this accepted result.
-    if (updates.checking ||
-        ModalRoute.of(context)?.isCurrent != true ||
-        (WidgetsBinding.instance.lifecycleState != null &&
-            WidgetsBinding.instance.lifecycleState !=
-                AppLifecycleState.resumed)) {
-      return;
-    }
+    // A newer check or channel change invalidates the accepted startup result.
+    if (updates.checking) return;
     _pendingStartup = null;
     unawaited(showAppUpdateDialog(context, updates));
   }
@@ -84,7 +108,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _scheduleStartupPrompt();
+    _scheduleUpdatePrompt();
   }
 
   Future<void> _listen() async {
@@ -99,11 +123,18 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
       );
       if (initial != null) {
         _share(initial);
-      } else {
-        unawaited(home.onResumed());
       }
+      await home.initializeClipboard();
     } catch (e) {
       if (mounted) showError(context, e);
+    } finally {
+      _homeInitialized = true;
+      if (mounted &&
+          _resumeHomePending &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(runAction(context, home.onResumed));
+      }
+      _resumeHomePending = false;
     }
   }
 
@@ -128,17 +159,33 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.dependencies.updates.setForegroundVisible(
+      state == AppLifecycleState.resumed,
+      owner: this,
+    );
+    if (!_backgrounded &&
+        (state == AppLifecycleState.hidden ||
+            state == AppLifecycleState.paused)) {
+      _backgrounded = true;
+      home.clear();
+    }
     if (state == AppLifecycleState.resumed) {
-      _scheduleStartupPrompt();
-      unawaited(widget.dependencies.updates.refreshTransfer());
+      _backgrounded = false;
+      _scheduleUpdatePrompt();
       unawaited(runAction(context, widget.dependencies.downloads.reconcile));
-      unawaited(runAction(context, home.onResumed));
+      if (_homeInitialized) {
+        unawaited(runAction(context, home.onResumed));
+      } else {
+        _resumeHomePending = true;
+      }
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.dependencies.updates.removeListener(_scheduleUpdatePrompt);
+    widget.dependencies.updates.setForegroundVisible(false, owner: this);
     unawaited(_shares?.cancel());
     home.dispose();
     _pages.dispose();

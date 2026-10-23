@@ -136,6 +136,7 @@ class AppFixture {
   final updateBackend = FakeUpdateBackend();
   final releaseClient = FixtureReleaseClient();
   String? clipboard;
+  Future<String?> Function()? clipboardReader;
   int clipboardReads = 0;
   Future<void> initialize() async {
     downloads = DownloadRepository(store: store, backend: backend);
@@ -167,6 +168,7 @@ class AppFixture {
       updates: updates,
       readClipboard: () async {
         clipboardReads++;
+        if (clipboardReader != null) return clipboardReader!();
         return clipboard;
       },
     );

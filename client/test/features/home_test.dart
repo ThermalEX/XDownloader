@@ -10,12 +10,109 @@ import 'package:xdownloader/features/home/home_controller.dart';
 import '../support/app_fixture.dart';
 
 void main() {
+  testWidgets(
+    'resume during clipboard initialization still checks a new link',
+    (tester) => withAppFixture(tester, (f) async {
+      final initial = Completer<String?>();
+      f.clipboardReader = () => initial.future;
+      await f.settings.edit((s) => s.copyWith(autoClipboard: true));
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      f.clipboardReader = () async => 'https://x.com/b/status/222222';
+      initial.complete('https://x.com/a/status/123456');
+      await tester.pumpAndSettle();
+      expect(find.text('https://x.com/author/status/222222'), findsOneWidget);
+      expect(f.parser.calls, ['https://x.com/b/status/222222']);
+    }),
+  );
+  testWidgets(
+    'backgrounding clears the query while tab changes and inactive preserve it',
+    (tester) => withAppFixture(tester, (f) async {
+      void background() {
+        for (final state in [
+          AppLifecycleState.inactive,
+          AppLifecycleState.hidden,
+          AppLifecycleState.paused,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+      }
+
+      void resume() {
+        for (final state in [
+          AppLifecycleState.hidden,
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+      }
+
+      f.clipboard = 'https://x.com/a/status/123456';
+      await f.settings.edit((s) => s.copyWith(autoClipboard: true));
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      expect(find.text('中文视频'), findsNothing);
+      expect(f.parser.calls, isEmpty);
+      await tester.tap(find.bySemanticsLabel('从剪贴板粘贴'));
+      await tester.pumpAndSettle();
+      expect(find.text('中文视频'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('nav_downloads')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('nav_home')));
+      await tester.pumpAndSettle();
+      expect(find.text('中文视频'), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('中文视频'), findsOneWidget);
+      // The clipboard still holds A when a different explicit share B arrives.
+      f.shareEvents.add('https://x.com/b/status/222222');
+      await tester.pumpAndSettle();
+      background();
+      resume();
+      await tester.pumpAndSettle();
+      expect(find.text('中文视频'), findsNothing);
+      expect(f.parser.calls, hasLength(2));
+      // An explicit new share arriving before resume must survive that resume.
+      background();
+      f.shareEvents.add('https://x.com/c/status/333333');
+      resume();
+      await tester.pumpAndSettle();
+      expect(find.text('https://x.com/author/status/333333'), findsOneWidget);
+    }),
+  );
   late AppFixture fixture;
   setUp(() async {
     fixture = AppFixture();
     await fixture.initialize();
   });
   tearDown(() => fixture.close());
+  test(
+    'a different share does not make an unchanged clipboard look new',
+    () async {
+      fixture.clipboard = 'https://x.com/a/status/123456';
+      await fixture.settings.edit((s) => s.copyWith(autoClipboard: true));
+      final controller = HomeController(fixture.dependencies);
+      await controller.onResumed();
+      await controller.acceptSharedText('https://x.com/b/status/222222');
+      controller.clear();
+      await controller.onResumed();
+      expect(controller.result, isNull);
+      expect(fixture.parser.calls, hasLength(2));
+      controller.dispose();
+    },
+  );
   test('new share wins over a stale parse', () async {
     final a = Completer<MediaResult>(), b = Completer<MediaResult>();
     fixture.parser.respond = (input, _) =>

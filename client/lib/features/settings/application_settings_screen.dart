@@ -59,7 +59,7 @@ class ApplicationSettingsScreen extends StatelessWidget {
               title: '剪贴板',
               child: SwitchListTile(
                 title: const Text('自动读取剪贴板'),
-                subtitle: const Text('回到解析页时识别新链接，保留手动输入'),
+                subtitle: const Text('返回应用时识别新复制的链接；启动时保持空白，保留手动输入'),
                 value: repository.value.autoClipboard,
                 onChanged: (value) => runAction(
                   context,
