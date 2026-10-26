@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'bootstrap.dart';
 import 'floating_actions_page.dart';
+import 'handed_layout.dart';
 import '../core/models/app_failure.dart';
 import '../core/models/app_update.dart';
 import '../features/home/home_controller.dart';
@@ -205,7 +206,8 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
                       MediaQuery.viewInsetsOf(context).bottom <
                   240
           ? null
-          : AppBar(
+          : HandedAppBar(
+              enabled: index != 3,
               title: Text(['XDownloader', '下载', '收藏', '设置'][index]),
               actions: [
                 if (index == 0) HomeSourceAction(controller: home),

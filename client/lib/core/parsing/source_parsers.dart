@@ -46,7 +46,9 @@ class SourceParsers {
       );
     }
 
-    if (source.kind == SourceKind.scrape || source.kind == SourceKind.snap) {
+    if (source.kind == SourceKind.scrape ||
+        source.kind == SourceKind.snap ||
+        source.kind == SourceKind.twmate) {
       var markup = text;
       if (text.trimLeft().startsWith('{')) {
         final root = _map(jsonDecode(text));
@@ -57,42 +59,78 @@ class SourceParsers {
         if (root['data'] is String) markup = root['data'] as String;
       }
       final html = markup.replaceAll(r'\/', '/').replaceAll('&amp;', '&');
-      final mediaIds = <String, int>{};
-      for (final match in RegExp(
-        r'''https?://[^\s"'<>\\)\]}]+''',
-        caseSensitive: false,
-      ).allMatches(html)) {
-        var raw = match[0]!.replaceFirst(RegExp(r'[.,;]+$'), '');
-        var uri = Uri.tryParse(raw);
-        if (uri?.host == 'dl.snapcdn.app') {
-          uri = _signedMedia(uri!);
-          if (uri == null) continue;
-          raw = uri.toString();
+      if (source.kind == SourceKind.twmate) {
+        for (final table in RegExp(
+          r'<table\b[^>]*>(.*?)</table>',
+          caseSensitive: false,
+          dotAll: true,
+        ).allMatches(html)) {
+          final index = groups.length + 1;
+          for (final row in RegExp(
+            r'<tr\b[^>]*>(.*?)</tr>',
+            caseSensitive: false,
+            dotAll: true,
+          ).allMatches(table[1]!)) {
+            final size = RegExp(
+              r'<td\b[^>]*>\s*(\d+)\s*[x×]\s*(\d+)\s*</td>',
+              caseSensitive: false,
+            ).firstMatch(row[1]!);
+            if (size == null) continue;
+            for (final anchor in RegExp(
+              r'<a\b[^>]*>',
+              caseSensitive: false,
+            ).allMatches(row[1]!)) {
+              final uri = Uri.tryParse(
+                _entities(_attributes(anchor[0]!)['href'] ?? ''),
+              );
+              if (uri == null ||
+                  !_secureHost(uri, 'twmate.com') ||
+                  !uri.path.startsWith('/download/') ||
+                  !uri.path.toLowerCase().endsWith('.mp4')) {
+                continue;
+              }
+              add(uri.toString(), index, width: size[1], height: size[2]);
+            }
+          }
         }
-        if (uri == null || !uri.path.toLowerCase().endsWith('.mp4')) continue;
-        final identity = uri.host.toLowerCase() == 'video.twimg.com'
-            ? RegExp(r'^/(amplify_video|ext_tw_video)/(\d+)/')
-                  .firstMatch(uri.path)
-            : null;
-        // CDN media IDs identify renditions. Unknown URLs stay separate rather
-        // than silently treating unrelated videos as alternative qualities.
-        final key = identity == null
-            ? uri.toString()
-            : '${uri.host}/${identity[1]}/${identity[2]}';
-        final index = mediaIds.putIfAbsent(key, () => mediaIds.length + 1);
-        add(raw, index);
+      } else {
+        final mediaIds = <String, int>{};
+        for (final match in RegExp(
+          r'''https?://[^\s"'<>\\)\]}]+''',
+          caseSensitive: false,
+        ).allMatches(html)) {
+          var raw = match[0]!.replaceFirst(RegExp(r'[.,;]+$'), '');
+          var uri = Uri.tryParse(raw);
+          if (uri?.host == 'twsaver.com') {
+            uri = _twsaverMedia(uri!);
+            if (uri == null) continue;
+            raw = uri.toString();
+          }
+          if (uri?.host == 'dl.snapcdn.app') {
+            uri = _signedMedia(uri!);
+            if (uri == null) continue;
+            raw = uri.toString();
+          }
+          if (uri == null || !uri.path.toLowerCase().endsWith('.mp4')) continue;
+          final identity = uri.host.toLowerCase() == 'video.twimg.com'
+              ? RegExp(r'^/(amplify_video|ext_tw_video)/(\d+)/')
+                    .firstMatch(uri.path)
+              : null;
+          // CDN media IDs identify renditions. Unknown URLs stay separate rather
+          // than silently treating unrelated videos as alternative qualities.
+          final key = identity == null
+              ? uri.toString()
+              : '${uri.host}/${identity[1]}/${identity[2]}';
+          final index = mediaIds.putIfAbsent(key, () => mediaIds.length + 1);
+          add(raw, index);
+        }
       }
       String meta(String name) {
         for (final tag in RegExp(
           r'<meta\b[^>]*>',
           caseSensitive: false,
         ).allMatches(html)) {
-          final attrs = <String, String>{};
-          for (final attr in RegExp(
-            r'''([\w:-]+)\s*=\s*["']([^"']*)["']''',
-          ).allMatches(tag[0]!)) {
-            attrs[attr[1]!.toLowerCase()] = attr[2]!;
-          }
+          final attrs = _attributes(tag[0]!);
           if (attrs['property'] == name || attrs['name'] == name) {
             return _entities(attrs['content'] ?? '');
           }
@@ -102,6 +140,26 @@ class SourceParsers {
 
       title = meta('og:title');
       thumbnail = meta('og:image');
+      if (source.kind == SourceKind.twmate) {
+        title = _entities(
+          RegExp(
+                r'<h4\b[^>]*>(.*?)</h4>',
+                caseSensitive: false,
+                dotAll: true,
+              ).firstMatch(html)?[1]?.replaceAll(RegExp(r'<[^>]+>'), '') ??
+              '',
+        );
+        thumbnail = _entities(
+          _attributes(
+                RegExp(
+                      r'<img\b[^>]*>',
+                      caseSensitive: false,
+                    ).firstMatch(html)?[0] ??
+                    '',
+              )['src'] ??
+              '',
+        );
+      }
       if (title.isEmpty) {
         title = _entities(
           RegExp(
@@ -127,6 +185,34 @@ class SourceParsers {
       if (decoded is! Map) throw const FormatException('Expected JSON object');
       final root = _map(decoded);
       switch (source.kind) {
+        case SourceKind.tweetdl:
+          if (root['error'] == true || _string(root['error']).isNotEmpty) {
+            throw const AppFailure(FailureKind.server, 'TweetDL 暂时无法解析，请切换其他源');
+          }
+          if (root['formats'] is! List) {
+            throw const FormatException('Missing formats');
+          }
+          title = _string(root['title']);
+          thumbnail = _string(root['thumbnail']);
+          duration = _number(root['duration_seconds']);
+          final mediaIds = <String, int>{};
+          for (final raw in root['formats']) {
+            final format = _map(raw);
+            final uri = _twitterMp4(format['preview_url']);
+            if (uri == null) continue;
+            final media = RegExp(r'^/(amplify_video|ext_tw_video)/(\d+)/')
+                .firstMatch(uri.path);
+            final key = media == null
+                ? uri.toString()
+                : '${media[1]}/${media[2]}';
+            add(
+              uri.toString(),
+              mediaIds.putIfAbsent(key, () => mediaIds.length + 1),
+              width: format['width'],
+              height: format['height'],
+              bitrate: _number(format['bitrate_kbps']) * 1000,
+            );
+          }
         case SourceKind.xdl:
           if (root['success'] != true) {
             final error = _string(root['error']);
@@ -213,6 +299,7 @@ class SourceParsers {
           }
         case SourceKind.scrape:
         case SourceKind.snap:
+        case SourceKind.twmate:
           break;
       }
     }
@@ -235,10 +322,7 @@ class SourceParsers {
   static Map<String, dynamic> _map(Object? value) =>
       value is Map ? Map<String, dynamic>.from(value) : {};
   static Uri? _signedMedia(Uri wrapper) {
-    if (wrapper.scheme != 'https' ||
-        wrapper.userInfo.isNotEmpty ||
-        wrapper.path != '/get' ||
-        (wrapper.hasPort && wrapper.port != 443)) {
+    if (!_secureHost(wrapper, 'dl.snapcdn.app') || wrapper.path != '/get') {
       return null;
     }
     try {
@@ -249,20 +333,38 @@ class SourceParsers {
       final payload = jsonDecode(
         utf8.decode(base64Url.decode(base64Url.normalize(pieces[1]))),
       );
-      final url = payload is Map ? payload['url'] : null;
-      if (url is! String) return null;
-      final uri = Uri.tryParse(url);
-      return uri != null &&
-              uri.scheme == 'https' &&
-              uri.host == 'video.twimg.com' &&
-              uri.userInfo.isEmpty &&
-              (!uri.hasPort || uri.port == 443) &&
-              uri.path.toLowerCase().endsWith('.mp4')
-          ? uri
-          : null;
+      return _twitterMp4(payload is Map ? payload['url'] : null);
     } catch (_) {
       return null;
     }
+  }
+
+  static Map<String, String> _attributes(String tag) => {
+    for (final a in RegExp(
+      r'''([\w:-]+)\s*=\s*["']([^"']*)["']''',
+    ).allMatches(tag))
+      a[1]!.toLowerCase(): a[2]!,
+  };
+  static bool _secureHost(Uri uri, String host) =>
+      uri.scheme == 'https' &&
+      uri.host == host &&
+      uri.userInfo.isEmpty &&
+      (!uri.hasPort || uri.port == 443);
+  static Uri? _twitterMp4(Object? raw) {
+    if (raw is! String) return null;
+    final uri = Uri.tryParse(raw);
+    return uri != null &&
+            _secureHost(uri, 'video.twimg.com') &&
+            uri.path.toLowerCase().endsWith('.mp4')
+        ? uri
+        : null;
+  }
+
+  static Uri? _twsaverMedia(Uri wrapper) {
+    if (!_secureHost(wrapper, 'twsaver.com') || wrapper.path != '/dl.php') {
+      return null;
+    }
+    return _twitterMp4(wrapper.queryParameters['url']);
   }
 
   static List<dynamic> _list(Object? value) => value is List ? value : [];

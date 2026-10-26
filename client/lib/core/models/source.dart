@@ -1,4 +1,4 @@
-enum SourceKind { xdl, fx, syndication, vx, scrape, snap }
+enum SourceKind { xdl, fx, syndication, vx, scrape, snap, tweetdl, twmate }
 
 class ParseSource {
   const ParseSource(
@@ -13,6 +13,14 @@ class ParseSource {
   final String id, name, endpoint, method, body;
   final SourceKind kind;
   final bool builtin;
+  String get requestMethod => switch (kind) {
+    SourceKind.xdl ||
+    SourceKind.snap ||
+    SourceKind.tweetdl ||
+    SourceKind.twmate => 'POST',
+    SourceKind.scrape => method.toUpperCase(),
+    _ => 'GET',
+  };
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,

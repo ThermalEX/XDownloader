@@ -138,10 +138,10 @@ class _EditorState extends State<SourceEditorScreen> {
                         maxLines: 3,
                       ),
                   ],
-                  if (kind == SourceKind.xdl)
+                  if (kind == SourceKind.xdl || kind == SourceKind.tweetdl)
                     const Padding(
                       padding: EdgeInsets.only(top: 16),
-                      child: Text('XDL 格式使用固定的 JSON POST 请求。'),
+                      child: Text('此格式使用固定的 JSON POST 请求。'),
                     ),
                   const SizedBox(height: 24),
                   FilledButton(

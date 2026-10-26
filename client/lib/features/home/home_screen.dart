@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../app/app_shell.dart';
+import '../../app/handed_layout.dart';
 import '../../app/branding_assets.dart';
 import '../../app/favorite_icon.dart';
 import '../../app/floating_actions_page.dart';
@@ -295,7 +296,7 @@ class _HomeComposerState extends State<HomeComposer>
               if (room >= 240 &&
                   !home.dependencies.settings.value.privacyMode) ...[
                 Align(
-                  alignment: Alignment.centerRight,
+                  alignment: HandedLayout.actionAlignment(context),
                   child: HomeFavoriteAction(home: home),
                 ),
                 const SizedBox(height: 9),
@@ -303,6 +304,7 @@ class _HomeComposerState extends State<HomeComposer>
               FloatingActionAnchor(
                 key: const Key('home_input_row'),
                 child: Row(
+                  textDirection: HandedLayout.rowDirection(context),
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
@@ -312,82 +314,73 @@ class _HomeComposerState extends State<HomeComposer>
                           isEmpty: home.input.isEmpty,
                           decoration: InputDecoration(
                             labelText: '视频链接',
-                            contentPadding: const EdgeInsets.fromLTRB(
-                              16,
-                              4,
-                              4,
-                              4,
-                            ),
+                            prefixIcon: HandedLayout.isLeft(context)
+                                ? suffix
+                                : null,
+                            suffixIcon: HandedLayout.isLeft(context)
+                                ? null
+                                : suffix,
+                            contentPadding: HandedLayout.isLeft(context)
+                                ? const EdgeInsets.fromLTRB(4, 4, 16, 4)
+                                : const EdgeInsets.fromLTRB(16, 4, 4, 4),
                             filled: true,
                             fillColor: colors.surfaceContainerLow,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(28),
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final field = TextField(
-                                      key: const Key('home_link_input'),
-                                      focusNode: _focus,
-                                      scrollController: _scroll,
-                                      keyboardType: TextInputType.url,
-                                      autocorrect: false,
-                                      enableSuggestions: false,
-                                      controller: _text,
-                                      onChanged: home.setInput,
-                                      onTapOutside: (_) => _focus.unfocus(),
-                                      minLines: 1,
-                                      maxLines:
-                                          _focus.hasFocus &&
-                                              MediaQuery.sizeOf(context)
-                                                      .height >=
-                                                  500
-                                          ? 3
-                                          : 1,
-                                      textInputAction: TextInputAction.go,
-                                      onSubmitted: (_) => _parse(),
-                                      decoration: null,
-                                    );
-                                    final measure = TextPainter(
-                                      text: TextSpan(
-                                        text: home.input.replaceAll('\n', ' '),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium,
-                                      ),
-                                      textDirection: TextDirection.ltr,
-                                      maxLines: 1,
-                                      textScaler: MediaQuery.textScalerOf(
-                                        context,
-                                      ),
-                                    )..layout();
-                                    final overflow =
-                                        !_focus.hasFocus &&
-                                        measure.width > constraints.maxWidth;
-                                    measure.dispose();
-                                    return ShaderMask(
-                                      blendMode: BlendMode.dstIn,
-                                      shaderCallback: (bounds) =>
-                                          LinearGradient(
-                                            colors: [
-                                              Colors.white,
-                                              Colors.white,
-                                              overflow
-                                                  ? Colors.transparent
-                                                  : Colors.white,
-                                            ],
-                                            stops: [0, .88, 1],
-                                          ).createShader(bounds),
-                                      child: field,
-                                    );
-                                  },
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final field = TextField(
+                                key: const Key('home_link_input'),
+                                focusNode: _focus,
+                                scrollController: _scroll,
+                                keyboardType: TextInputType.url,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                controller: _text,
+                                onChanged: home.setInput,
+                                onTapOutside: (_) => _focus.unfocus(),
+                                minLines: 1,
+                                maxLines:
+                                    _focus.hasFocus &&
+                                        MediaQuery.sizeOf(context).height >= 500
+                                    ? 3
+                                    : 1,
+                                textInputAction: TextInputAction.go,
+                                onSubmitted: (_) => _parse(),
+                                decoration: null,
+                              );
+                              final measure = TextPainter(
+                                text: TextSpan(
+                                  text: home.input.replaceAll('\n', ' '),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
                                 ),
-                              ),
-                              suffix,
-                            ],
+                                textDirection: TextDirection.ltr,
+                                maxLines: 1,
+                                textScaler: MediaQuery.textScalerOf(context),
+                              )..layout();
+                              final overflow =
+                                  !_focus.hasFocus &&
+                                  measure.width > constraints.maxWidth;
+                              measure.dispose();
+                              return ShaderMask(
+                                blendMode: BlendMode.dstIn,
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [
+                                    Colors.white,
+                                    Colors.white,
+                                    overflow
+                                        ? Colors.transparent
+                                        : Colors.white,
+                                  ],
+                                  stops: [0, .88, 1],
+                                ).createShader(bounds),
+                                child: field,
+                              );
+                            },
                           ),
                         ),
                       ),

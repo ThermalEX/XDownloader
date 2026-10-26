@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/handed_layout.dart';
 import '../../app/app_shell.dart';
 import '../../app/library_search.dart';
 import '../../core/models/app_failure.dart';
@@ -77,9 +78,10 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
+        actionsAlignment: HandedLayout.dialogAlignment(context),
         title: const Text('清空下载历史？'),
         content: const Text('只删除历史记录，不删除视频或取消正在下载的任务。'),
-        actions: [
+        actions: HandedLayout.actions(context, [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
             child: const Text('取消'),
@@ -88,7 +90,7 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
             onPressed: () => Navigator.pop(c, true),
             child: const Text('清空'),
           ),
-        ],
+        ]),
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -109,8 +111,11 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
             ? null
             : () => _action(entry, _HistoryAction.parse),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
+          padding: HandedLayout.isLeft(context)
+              ? const EdgeInsets.fromLTRB(4, 12, 16, 12)
+              : const EdgeInsets.fromLTRB(16, 12, 4, 12),
           child: Row(
+            textDirection: HandedLayout.rowDirection(context),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -176,7 +181,7 @@ class _DownloadHistoryScreenState extends State<DownloadHistoryScreen> {
           )
           .toList();
       return Scaffold(
-        appBar: AppBar(
+        appBar: HandedAppBar(
           title: const Text('下载历史'),
           actions: [
             IconButton(

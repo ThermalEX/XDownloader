@@ -5,6 +5,7 @@ import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../app/handed_layout.dart';
 import '../../app/app_shell.dart';
 import '../../platform/player_device_controls.dart';
 import 'player_orientation_button.dart';
@@ -205,6 +206,15 @@ class _MaterialPlayerControlsState extends State<MaterialPlayerControls> {
             .clamp(0.0, math.max(duration, 1.0))
             .toDouble();
         final show = _visible;
+        final leftHanded = HandedLayout.isLeft(context);
+        final timeline = Expanded(
+          child: Text(
+            '${playbackTime(Duration(milliseconds: position.round()))} / ${playbackTime(value.duration)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        );
         return Stack(
           children: [
             Positioned.fill(
@@ -312,14 +322,7 @@ class _MaterialPlayerControlsState extends State<MaterialPlayerControls> {
                                       : Icons.play_arrow,
                                 ),
                               ),
-                              Expanded(
-                                child: Text(
-                                  '${playbackTime(Duration(milliseconds: position.round()))} / ${playbackTime(value.duration)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ),
+                              if (!leftHanded) timeline,
                               TextButton(
                                 onPressed: _speed,
                                 child: Tooltip(
@@ -336,6 +339,7 @@ class _MaterialPlayerControlsState extends State<MaterialPlayerControls> {
                                       : Icons.fullscreen,
                                 ),
                               ),
+                              if (leftHanded) timeline,
                             ],
                           ),
                         ],
@@ -347,7 +351,8 @@ class _MaterialPlayerControlsState extends State<MaterialPlayerControls> {
             if (show && chewie.isFullScreen)
               Positioned(
                 top: 8,
-                right: 8,
+                left: leftHanded ? 64 : null,
+                right: leftHanded ? null : 8,
                 child: SafeArea(
                   child: PlayerOrientationButton(
                     controller: chewie,

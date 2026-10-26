@@ -7,6 +7,7 @@ import 'dynamic_palette.dart';
 import 'bootstrap.dart';
 import 'app_theme.dart';
 import 'app_shell.dart';
+import 'handed_layout.dart';
 import '../core/models/app_settings.dart';
 import '../data/repositories/update_repository.dart';
 
@@ -101,11 +102,13 @@ class _AppState extends State<XDownloaderApp> {
               Widget app(ColorScheme? light, ColorScheme? dark) => MaterialApp(
                 key: const ValueKey('ready'),
                 title: 'XDownloader',
-                builder: (context, child) =>
-                    AnnotatedRegion<SystemUiOverlayStyle>(
-                      value: AppTheme.systemBars(Theme.of(context).brightness),
-                      child: child ?? const SizedBox.shrink(),
-                    ),
+                builder: (context, child) => HandedLayout(
+                  handedness: settings.handedness,
+                  child: AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: AppTheme.systemBars(Theme.of(context).brightness),
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                ),
                 debugShowCheckedModeBanner: false,
                 localizationsDelegates: GlobalMaterialLocalizations.delegates,
                 supportedLocales: const [Locale('zh', 'CN'), Locale('en')],

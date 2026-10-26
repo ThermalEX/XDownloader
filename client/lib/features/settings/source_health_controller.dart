@@ -4,9 +4,11 @@ import '../../core/models/app_failure.dart';
 import '../../core/models/media.dart';
 import '../../core/models/source.dart';
 import '../../core/parsing/parse_client.dart';
+import '../../data/repositories/source_repository.dart';
 
 class SourceHealthController extends ChangeNotifier {
-  SourceHealthController(this.parser);
+  SourceHealthController(this.parser, {this.repository});
+  final SourceRepository? repository;
   final ParseClient parser;
   final _pending = <String, ParseCancellation>{};
   final _results = <String, String>{};
@@ -23,6 +25,7 @@ class SourceHealthController extends ChangeNotifier {
     _results.remove(source.id);
     notifyListeners();
     final watch = Stopwatch()..start();
+    var parsed = false;
     try {
       final media = await parser.parse(
         'https://x.com/9GAG/status/1661175429859012608',
@@ -35,15 +38,23 @@ class SourceHealthController extends ChangeNotifier {
       if (variants.isEmpty) {
         throw const AppFailure(FailureKind.noVideo, '未解析到视频');
       }
+      if (_disposed || cancellation.isCancelled) return;
+      parsed = true;
       final best = variants.first;
+      await parser.verifyMedia(best.url, cancellation);
+      if (_disposed || cancellation.isCancelled) return;
+      repository?.recordAttempt(source.id, true);
       final size = best.width > 0 && best.height > 0
           ? '${best.width} × ${best.height}'
           : best.extension.toUpperCase();
       _results[source.id] =
-          '可用 · $size · ${media.items.length} 个视频 / ${variants.length} 档 · ${watch.elapsedMilliseconds} ms';
+          '可用（已验证视频） · $size · ${media.items.length} 个视频 / ${variants.length} 档 · ${watch.elapsedMilliseconds} ms';
     } catch (error) {
+      if (_disposed || cancellation.isCancelled) return;
+      repository?.recordAttempt(source.id, false);
+      final status = parsed ? '可解析，下载验证失败' : '不可用';
       _results[source.id] =
-          '不可用 · ${error is AppFailure ? error.message : '检测失败，请重试'}';
+          '$status · ${error is AppFailure ? error.message : '检测失败，请重试'}';
     } finally {
       _pending.remove(source.id);
       if (!_disposed) notifyListeners();

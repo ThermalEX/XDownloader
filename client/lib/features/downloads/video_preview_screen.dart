@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 
+import '../../app/handed_layout.dart';
 import '../../app/app_shell.dart';
 import '../../core/models/download.dart';
 import '../../platform/player_device_controls.dart';
@@ -104,7 +105,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
+    appBar: HandedAppBar(
       title: const Text('视频预览'),
       actions: [
         PlayerOrientationButton(controller: _chewie),

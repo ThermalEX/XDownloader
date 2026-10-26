@@ -5,28 +5,93 @@ import '../../core/parsing/source_catalog.dart';
 import '../../core/parsing/parse_client.dart';
 import '../../core/parsing/source_exchange.dart';
 import '../../core/models/app_failure.dart';
+import '../../core/models/media.dart';
 import '../../platform/download_backend.dart';
 import '../storage/snapshot_store.dart';
 import '../storage/serial_queue.dart';
 
 class SourceRepository extends ChangeNotifier {
-  SourceRepository(this.store);
+  SourceRepository(this.store, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
+  final DateTime Function() _now;
+  List<String> _order = [];
+  final _failedUntil = <String, DateTime>{};
+  bool _disposed = false;
   final SnapshotStore store;
   final _queue = SerialQueue();
   List<ParseSource> _custom = [];
   String _currentId = 'xdl';
   bool _autoFallback = true;
-  List<ParseSource> get list =>
-      List.unmodifiable([...SourceCatalog.builtins, ..._custom]);
-  List<ParseSource> get parseOrder => List.unmodifiable([
-    ...list.where((s) => s.id == currentId),
-    ...list.where((s) => s.id != currentId),
-  ]);
+  List<ParseSource> get list {
+    final remaining = {
+      for (final s in [...SourceCatalog.builtins, ..._custom]) s.id: s,
+    };
+    final sorted = <ParseSource>[];
+    for (final id in _order) {
+      final source = remaining.remove(id);
+      if (source != null) sorted.add(source);
+    }
+    return List.unmodifiable([...sorted, ...remaining.values]);
+  }
+
+  List<ParseSource> get parseOrder {
+    final ordered = list;
+    final now = _now();
+    return List.unmodifiable([
+      ...ordered.where((s) => s.id == currentId),
+      ...ordered.where(
+        (s) =>
+            s.id != currentId && !(_failedUntil[s.id]?.isAfter(now) ?? false),
+      ),
+    ]);
+  }
+
+  void recordAttempt(String id, bool success) {
+    if (_disposed || !list.any((s) => s.id == id)) return;
+    if (success) {
+      _failedUntil.remove(id);
+    } else {
+      _failedUntil[id] = _now().add(const Duration(minutes: 2));
+    }
+  }
+
+  Future<MediaResult> runParse(
+    ParseClient parser,
+    String input,
+    ParseCancellation cancellation,
+  ) async {
+    final result = await parser.parse(
+      input,
+      sources: parseOrder,
+      autoFallback: autoFallback,
+      cancellation: cancellation,
+    );
+    if (!cancellation.isCancelled) recordAttempt(result.sourceId, true);
+    return result;
+  }
+
+  Future<void> movePriority(String id, int direction) => _queue.run(() async {
+    if (direction != -1 && direction != 1) {
+      throw const AppFailure(FailureKind.malformed, '优先级调整无效');
+    }
+    final ids = list.map((s) => s.id).toList();
+    final index = ids.indexOf(id);
+    if (index < 0) throw const AppFailure(FailureKind.malformed, '解析源不存在');
+    final target = index + direction;
+    if (target < 0 || target >= ids.length) return;
+    ids.removeAt(index);
+    ids.insert(target, id);
+    await _save(_custom, _currentId, _autoFallback, order: ids);
+  });
   String get currentId => _currentId;
   bool get autoFallback => _autoFallback;
   Future<void> initialize() async {
     final m = await store.read('sources');
     try {
+      _order = (m['order'] as List? ?? []).cast<String>();
+      if (_order.toSet().length != _order.length) {
+        throw const FormatException('Duplicate source order');
+      }
       _custom = (m['custom'] as List? ?? [])
           .map((v) => ParseSource.fromJson(Map<String, dynamic>.from(v as Map)))
           .toList();
@@ -41,13 +106,16 @@ class SourceRepository extends ChangeNotifier {
   Future<void> _save(
     List<ParseSource> custom,
     String current,
-    bool fallback,
-  ) async {
+    bool fallback, {
+    List<String>? order,
+  }) async {
     await store.write('sources', {
       'custom': custom.map((s) => s.toJson()).toList(),
       'current': current,
       'fallback': fallback,
+      'order': order ?? _order,
     });
+    _order = order ?? _order;
     _custom = custom;
     _currentId = current;
     _autoFallback = fallback;
@@ -74,9 +142,7 @@ class SourceRepository extends ChangeNotifier {
       source.name.trim(),
       source.endpoint.trim(),
       source.kind,
-      source.kind == SourceKind.xdl || source.kind == SourceKind.snap
-          ? 'POST'
-          : source.method.toUpperCase(),
+      source.requestMethod,
       source.body,
       false,
     );
@@ -91,6 +157,7 @@ class SourceRepository extends ChangeNotifier {
     if (SourceCatalog.builtins.any((s) => s.id == id)) {
       throw const AppFailure(FailureKind.malformed, '内置解析源不能删除');
     }
+    _failedUntil.remove(id);
     await _save(
       _custom.where((s) => s.id != id).toList(),
       _currentId == id ? 'xdl' : _currentId,
@@ -102,6 +169,7 @@ class SourceRepository extends ChangeNotifier {
       throw const AppFailure(FailureKind.malformed, '解析源不存在');
     }
     await _save(_custom, id, _autoFallback);
+    _failedUntil.remove(id);
   });
   Future<void> setFallback(bool enabled) =>
       _queue.run(() => _save(_custom, _currentId, enabled));
@@ -154,4 +222,10 @@ class SourceRepository extends ChangeNotifier {
     if (added > 0) await _save(next, _currentId, _autoFallback);
     return added;
   });
+  @override
+  void dispose() {
+    _disposed = true;
+    _failedUntil.clear();
+    super.dispose();
+  }
 }

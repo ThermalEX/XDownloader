@@ -224,3 +224,13 @@ client/lib/features/settings/privacy_unlock_screen.dart
 client/lib/platform/android_privacy_passwords.dart
 client/android/app/src/main/kotlin/com/xdl/app/NativePrivacyPasswords.kt
 client/test/platform/privacy_passwords_test.dart
+client/lib/app/handed_layout.dart
+client/test/features/handedness_test.dart
+client/test/core/four_sources_test.dart
+client/lib/data/repositories/download_retry_resolver.dart
+client/test/core/media_probe_test.dart
+client/test/data/source_optimization_test.dart
+client/test/features/home_notification_test.dart
+client/test/data/cover_cache_memory_test.dart
+client/test/data/download_retry_refresh_test.dart
+client/test/data/download_retry_resolver_test.dart

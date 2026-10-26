@@ -23,7 +23,8 @@ class CoverCacheRepository extends ChangeNotifier {
     required this.root,
     required this.settings,
     http.Client? client,
-  }) : _client = client ?? http.Client() {
+  }) : _client = client ?? http.Client(),
+       _previousLimitMb = settings.value.coverCacheLimitMb {
     settings.addListener(_privacyChanged);
   }
   final Directory root;
@@ -33,7 +34,16 @@ class CoverCacheRepository extends ChangeNotifier {
   final _files = <String, CoverCacheEntry>{};
   final _pending = <String, Future<Uint8List?>>{};
   final _requests = <Completer<void>>{};
+  // Insertion order is the byte-cache LRU, oldest first.
+  final _memory = <String, Uint8List>{};
+  final _dirtyAccesses = <String, CoverCacheEntry>{};
+  int _memoryBytes = 0;
+  int _previousLimitMb;
+  Timer? _accessTimer;
   static const maxImageBytes = 4 * 1024 * 1024;
+  static const _maxMemoryBytes = 8 * 1024 * 1024;
+  static const _maxMemoryEntries = 32;
+  static const _accessWriteInterval = Duration(seconds: 30);
   static final _ownName = RegExp(r'^[a-f0-9]{64}\.jpg$');
   int _generation = 0;
   bool _closed = false;
@@ -51,16 +61,72 @@ class CoverCacheRepository extends ChangeNotifier {
   }
 
   void _privacyChanged() {
-    if (settings.value.privacyMode) _invalidate();
+    final limit = limitMb;
+    if (settings.value.privacyMode || limit < _previousLimitMb) _invalidate();
+    _previousLimitMb = limit;
   }
 
   void _invalidate() {
     _generation++;
     _pending.clear();
+    _memory.clear();
+    _memoryBytes = 0;
+    _dirtyAccesses.clear();
+    _accessTimer?.cancel();
+    _accessTimer = null;
     for (final abort in _requests) {
       if (!abort.isCompleted) abort.complete();
     }
     _requests.clear();
+  }
+
+  void _forgetMemory(String name) {
+    final removed = _memory.remove(name);
+    if (removed != null) _memoryBytes -= removed.length;
+  }
+
+  void _remember(String name, Uint8List bytes) {
+    _forgetMemory(name);
+    final budget = (limitMb * 1024 * 1024).clamp(0, _maxMemoryBytes);
+    if (bytes.length > budget || budget == 0) return;
+    while (_memory.isNotEmpty &&
+        (_memoryBytes + bytes.length > budget ||
+            _memory.length >= _maxMemoryEntries)) {
+      _forgetMemory(_memory.keys.first);
+    }
+    _memory[name] = bytes;
+    _memoryBytes += bytes.length;
+  }
+
+  void _touch(String name) {
+    final entry = _files[name];
+    if (entry == null) return;
+    final touched = CoverCacheEntry(entry.file, entry.bytes, DateTime.now());
+    // Eviction always sees exact access order even between disk write batches.
+    _files[name] = touched;
+    _dirtyAccesses[name] = touched;
+    if (_accessTimer != null) return;
+    final generation = _generation;
+    _accessTimer = Timer(_accessWriteInterval, () {
+      _accessTimer = null;
+      unawaited(_queue.run(() => _flushAccesses(generation)));
+    });
+  }
+
+  Future<void> _flushAccesses(int generation) async {
+    final pending = Map<String, CoverCacheEntry>.of(_dirtyAccesses);
+    for (final item in pending.entries) {
+      if (!_valid(generation)) return;
+      if (!identical(_files[item.key], item.value)) continue;
+      try {
+        await item.value.file.setLastModified(item.value.accessed);
+      } on FileSystemException {
+        // Recency persistence is best effort, just like the image disk cache.
+      }
+      if (identical(_dirtyAccesses[item.key], item.value)) {
+        _dirtyAccesses.remove(item.key);
+      }
+    }
   }
 
   Future<void> initialize() => _queue.run(() async {
@@ -106,6 +172,12 @@ class CoverCacheRepository extends ChangeNotifier {
     try {
       final cached = await _queue.run(() async {
         if (!_valid(generation)) return null;
+        final warm = _memory[name];
+        if (warm != null) {
+          _remember(name, warm);
+          _touch(name);
+          return warm;
+        }
         final entry = _files[name];
         if (entry == null) return null;
         try {
@@ -113,15 +185,23 @@ class CoverCacheRepository extends ChangeNotifier {
           if (size <= 0 || size > maxImageBytes) {
             await entry.file.delete();
             _files.remove(name);
+            _dirtyAccesses.remove(name);
             return null;
           }
           final bytes = await entry.file.readAsBytes();
-          final accessed = DateTime.now();
-          await entry.file.setLastModified(accessed);
-          _files[name] = CoverCacheEntry(entry.file, bytes.length, accessed);
+          if (!_valid(generation)) return null;
+          _files[name] = CoverCacheEntry(
+            entry.file,
+            bytes.length,
+            entry.accessed,
+          );
+          _remember(name, bytes);
+          _touch(name);
           return bytes;
         } on FileSystemException {
           _files.remove(name);
+          _dirtyAccesses.remove(name);
+          _forgetMemory(name);
           return null;
         }
       });
@@ -151,6 +231,9 @@ class CoverCacheRepository extends ChangeNotifier {
             }
             _files[name] = CoverCacheEntry(file, data.length, DateTime.now());
             await _trim();
+            if (_valid(generation) && _files.containsKey(name)) {
+              _remember(name, data);
+            }
             _notify();
           } finally {
             if (await temp.exists()) await temp.delete();
@@ -171,7 +254,10 @@ class CoverCacheRepository extends ChangeNotifier {
     for (final entry in entries.reversed) {
       if (used <= limitMb * 1024 * 1024) break;
       if (await entry.file.exists()) await entry.file.delete();
-      _files.remove(entry.file.uri.pathSegments.last);
+      final name = entry.file.uri.pathSegments.last;
+      _files.remove(name);
+      _dirtyAccesses.remove(name);
+      _forgetMemory(name);
       used -= entry.bytes;
     }
   }

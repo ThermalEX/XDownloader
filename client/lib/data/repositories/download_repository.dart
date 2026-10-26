@@ -5,6 +5,7 @@ import 'dart:async';
 import '../../core/models/app_failure.dart';
 import '../../core/models/download.dart';
 import '../../core/models/download_history.dart';
+import '../../core/parsing/parse_client.dart';
 import '../../core/parsing/post_link.dart';
 import '../../platform/download_backend.dart';
 import '../storage/snapshot_store.dart';
@@ -16,16 +17,20 @@ class DownloadRepository extends ChangeNotifier {
     required this.store,
     required this.backend,
     this.coverCache,
+    this.refreshRequest,
   });
   final CoverCacheRepository? coverCache;
   final SnapshotStore store;
   final DownloadBackend backend;
+  final Future<DownloadRequest> Function(DownloadRequest, ParseCancellation)?
+  refreshRequest;
   final _queue = SerialQueue();
   List<DownloadRecord> _records = const [];
   List<DownloadHistoryEntry> _history = const [];
   Set<String> _historySuppressed = {};
   final _ignored = <String>{};
   final _diagnostics = <String>[];
+  final _retries = <String, _PendingRetry>{};
   StreamSubscription<BackendTaskSnapshot>? _subscription;
   bool _disposed = false;
   AppFailure? storageFailure;
@@ -158,7 +163,10 @@ class DownloadRepository extends ChangeNotifier {
 
   Future<String> start(DownloadRequest request) =>
       _queue.run(() => _start(request));
-  Future<String> _start(DownloadRequest request) async {
+  Future<String> _start(
+    DownloadRequest request, {
+    ParseCancellation? cancellation,
+  }) async {
     final existing = _records
         .where((r) => !r.phase.terminal && r.request.url == request.url)
         .firstOrNull;
@@ -176,12 +184,59 @@ class DownloadRepository extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     await _save([record, ..._records]);
+    if (cancellation?.isCancelled == true) {
+      // The queue is still ours and native enqueue has not begun. Roll back
+      // this provisional entry, including the history added by its first save.
+      await _save(
+        _records.where((r) => r.taskId != request.taskId).toList(),
+        history: _history.where((h) => h.taskId != request.taskId).toList(),
+      );
+      throw const AppFailure(FailureKind.cancelled, '已取消重试');
+    }
+    AppFailure? enqueueError;
     try {
       await backend.enqueue(request);
     } on AppFailure catch (e) {
-      await _put(record.copyWith(phase: DownloadPhase.failed, error: e));
+      enqueueError = e;
+    }
+    if (cancellation?.isCancelled == true) {
+      await _cancelReplacement(record);
+      throw const AppFailure(FailureKind.cancelled, '已取消重试');
+    }
+    final error = enqueueError;
+    if (error != null) {
+      await _put(record.copyWith(phase: DownloadPhase.failed, error: error));
+      if (cancellation?.isCancelled == true) {
+        await _cancelReplacement(record);
+        throw const AppFailure(FailureKind.cancelled, '已取消重试');
+      }
     }
     return request.taskId;
+  }
+
+  Future<void> _cancelReplacement(DownloadRecord record) async {
+    await backend.cancel(record.taskId);
+    final native = (await backend.snapshot())
+        .where((s) => s.taskId == record.taskId)
+        .firstOrNull;
+    if (native?.savedFile != null) {
+      // Native cancellation preserves any publication that already committed.
+      // Recover its receipt before queued transfer events can replay.
+      final file = native!.savedFile!;
+      await _put(
+        record.copyWith(
+          phase: DownloadPhase.completed,
+          savedFile: file,
+          bytes: file.bytes,
+          totalBytes: file.bytes,
+          clearError: true,
+        ),
+      );
+    } else {
+      await _put(
+        record.copyWith(phase: DownloadPhase.cancelled, clearError: true),
+      );
+    }
   }
 
   Future<void> _publish(DownloadRecord record) async {
@@ -288,31 +343,120 @@ class DownloadRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> cancel(String id) => _queue.run(() async {
-    final r = _find(id);
-    if (r == null || r.phase.terminal) return;
-    await backend.cancel(id);
-    final native = (await backend.snapshot())
-        .where((s) => s.taskId == id)
-        .firstOrNull;
-    if (native?.savedFile != null) {
-      await _merge(native!);
-    } else {
-      await _put(r.copyWith(phase: DownloadPhase.cancelled, clearError: true));
+  Future<void> cancel(String id) {
+    _invalidateRetry(id);
+    return _queue.run(() async {
+      final r = _find(id);
+      if (r == null || r.phase.terminal) return;
+      await backend.cancel(id);
+      final native = (await backend.snapshot())
+          .where((s) => s.taskId == id)
+          .firstOrNull;
+      if (native?.savedFile != null) {
+        await _merge(native!);
+      } else {
+        await _put(
+          r.copyWith(phase: DownloadPhase.cancelled, clearError: true),
+        );
+      }
+    });
+  }
+
+  Future<String> retry(String id) {
+    final existing = _retries[id];
+    if (existing != null) return existing.result.future;
+    final pending = _PendingRetry();
+    _retries[id] = pending;
+    unawaited(
+      _retry(id, pending)
+          .then<void>(
+            pending.result.complete,
+            onError: (Object error, StackTrace stack) {
+              pending.result.completeError(error, stack);
+            },
+          )
+          .whenComplete(() {
+            if (identical(_retries[id], pending)) _retries.remove(id);
+          }),
+    );
+    return pending.result.future;
+  }
+
+  Future<String> _retry(String id, _PendingRetry pending) async {
+    DownloadRecord? original;
+    await _queue.run(() async {
+      _checkRetry(pending);
+      final record = _find(id);
+      if (record == null) {
+        throw const AppFailure(FailureKind.fileMissing, '下载记录不存在');
+      }
+      if (record.phase == DownloadPhase.publishing) {
+        await _publish(record);
+      } else if (record.phase == DownloadPhase.failed ||
+          record.phase == DownloadPhase.cancelled) {
+        original = record;
+      }
+    });
+    final record = original;
+    if (record == null) return id;
+    var request = record.request;
+    final refresh = refreshRequest;
+    if (refresh != null && _shouldRefresh(record)) {
+      // Parsing may wait for several sources. Keep native events and user
+      // cancellation/deletion free to use the serialized persistence queue.
+      request = await Future.any<DownloadRequest>([
+        Future.sync(() => refresh(request, pending.cancellation)),
+        pending.cancellation.whenCancelled.then(
+          (_) => throw const AppFailure(FailureKind.cancelled, '已取消重试'),
+        ),
+      ]);
     }
-  });
-  Future<String> retry(String id) => _queue.run(() async {
-    final r = _find(id);
-    if (r == null) throw const AppFailure(FailureKind.fileMissing, '下载记录不存在');
-    if (r.phase == DownloadPhase.publishing) {
-      await _publish(r);
-      return id;
+    return _queue.run(() async {
+      _checkRetry(pending);
+      if (!identical(_find(id), record)) {
+        throw const AppFailure(FailureKind.cancelled, '下载记录已变化，请重新重试');
+      }
+      return _start(
+        request.withId(newTaskId()),
+        cancellation: pending.cancellation,
+      );
+    });
+  }
+
+  bool _shouldRefresh(DownloadRecord record) {
+    if (record.phase != DownloadPhase.failed ||
+        record.request.postUrl == null) {
+      return false;
     }
-    if (r.phase == DownloadPhase.failed || r.phase == DownloadPhase.cancelled) {
-      return _start(r.request.withId(newTaskId()));
+    final error = record.error;
+    if (error == null ||
+        [
+          FailureKind.network,
+          FailureKind.timeout,
+          FailureKind.server,
+        ].contains(error.kind)) {
+      return true;
     }
-    return id;
-  });
+    // Android currently maps DownloadManager failures to storage. Only its
+    // explicit transfer reasons qualify; disk/publication failures do not.
+    final match = RegExp(r'^系统下载失败\s*\((\d+)\)$')
+        .firstMatch(error.details?.trim() ?? '');
+    final reason = int.tryParse(match?.group(1) ?? '');
+    return reason != null &&
+        (reason >= 400 && reason <= 599 ||
+            const [1000, 1002, 1004, 1005, 1008].contains(reason));
+  }
+
+  void _checkRetry(_PendingRetry pending) {
+    if (_disposed || pending.cancellation.isCancelled) {
+      throw const AppFailure(FailureKind.cancelled, '已取消重试');
+    }
+  }
+
+  void _invalidateRetry(String id) {
+    _retries.remove(id)?.cancellation.cancel();
+  }
+
   Future<void> reconcile() => _queue.run(() async {
     final states = await backend.snapshot();
     for (final s in states) {
@@ -446,14 +590,17 @@ class DownloadRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> removeRecord(String id) => _queue.run(() async {
-    final record = _find(id);
-    if (record == null) return;
-    if (!record.phase.terminal) {
-      throw const AppFailure(FailureKind.storage, '请先取消正在下载的任务');
-    }
-    await _removeRecord(id);
-  });
+  Future<void> removeRecord(String id) {
+    _invalidateRetry(id);
+    return _queue.run(() async {
+      final record = _find(id);
+      if (record == null) return;
+      if (!record.phase.terminal) {
+        throw const AppFailure(FailureKind.storage, '请先取消正在下载的任务');
+      }
+      await _removeRecord(id);
+    });
+  }
 
   Future<void> deleteFile(String id) => _queue.run(() async {
     final record = _find(id);
@@ -465,20 +612,25 @@ class DownloadRepository extends ChangeNotifier {
     await _removeRecord(id);
   });
 
-  Future<void> clearCompletedHistory() => _queue.run(() async {
-    final before = _ignored.toSet();
-    _ignored.addAll(
-      _records.where((r) => r.phase.terminal).map((r) => r.taskId),
-    );
-    try {
-      await _save(_records.where((r) => !r.phase.terminal).toList());
-    } catch (_) {
-      _ignored
-        ..clear()
-        ..addAll(before);
-      rethrow;
+  Future<void> clearCompletedHistory() {
+    for (final id in _retries.keys.toList()) {
+      if (_find(id)?.phase.terminal == true) _invalidateRetry(id);
     }
-  });
+    return _queue.run(() async {
+      final before = _ignored.toSet();
+      _ignored.addAll(
+        _records.where((r) => r.phase.terminal).map((r) => r.taskId),
+      );
+      try {
+        await _save(_records.where((r) => !r.phase.terminal).toList());
+      } catch (_) {
+        _ignored
+          ..clear()
+          ..addAll(before);
+        rethrow;
+      }
+    });
+  }
 
   Future<void> removeHistory(String taskId) => _queue.run(
     () => _save(
@@ -502,8 +654,17 @@ class DownloadRepository extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    for (final pending in _retries.values) {
+      pending.cancellation.cancel();
+    }
+    _retries.clear();
     unawaited(_subscription?.cancel());
     coverCache?.dispose();
     super.dispose();
   }
+}
+
+class _PendingRetry {
+  final cancellation = ParseCancellation();
+  final result = Completer<String>();
 }

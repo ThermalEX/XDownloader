@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'handed_layout.dart';
+
 import '../data/repositories/settings_repository.dart';
 import '../core/parsing/post_link.dart';
 
@@ -65,31 +67,35 @@ class LibrarySearchField extends StatelessWidget {
   final String name;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-    child: TextField(
-      key: Key('${name}_search'),
-      controller: search.text,
-      onChanged: search.update,
-      textInputAction: TextInputAction.search,
-      onSubmitted: (_) => FocusScope.of(context).unfocus(),
-      decoration: InputDecoration(
-        hintText: '搜索标题、链接或帖子编号',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: search.text.text.isEmpty
-            ? null
-            : IconButton(
-                tooltip: '清空搜索',
-                onPressed: search.clear,
-                icon: const Icon(Icons.close),
-              ),
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surfaceContainer,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide.none,
+  Widget build(BuildContext context) {
+    final clear = search.text.text.isEmpty
+        ? null
+        : IconButton(
+            tooltip: '清空搜索',
+            onPressed: search.clear,
+            icon: const Icon(Icons.close),
+          );
+    final left = HandedLayout.isLeft(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: TextField(
+        key: Key('${name}_search'),
+        controller: search.text,
+        onChanged: search.update,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => FocusScope.of(context).unfocus(),
+        decoration: InputDecoration(
+          hintText: '搜索标题、链接或帖子编号',
+          prefixIcon: left ? clear : const Icon(Icons.search),
+          suffixIcon: left ? const Icon(Icons.search) : clear,
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surfaceContainer,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

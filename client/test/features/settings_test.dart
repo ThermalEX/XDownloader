@@ -1,3 +1,4 @@
+import 'package:xdownloader/core/parsing/source_catalog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -191,14 +192,14 @@ void main() {
       );
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
-      expect(fixture.sources.list.length, 7);
+      expect(fixture.sources.list.length, SourceCatalog.builtins.length);
       await tester.enterText(
         find.byKey(const Key('source_endpoint')),
         'https://source.test/?url={urlenc}',
       );
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
-      expect(fixture.sources.list.length, 8);
+      expect(fixture.sources.list.length, SourceCatalog.builtins.length + 1);
     }),
   );
   testWidgets(

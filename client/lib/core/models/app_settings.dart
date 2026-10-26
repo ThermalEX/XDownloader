@@ -3,9 +3,12 @@ import '../security/privacy_password.dart';
 
 enum AppThemeMode { system, light, dark }
 
+enum Handedness { right, left }
+
 class AppSettings {
   const AppSettings({
     this.themeMode = AppThemeMode.system,
+    this.handedness = Handedness.right,
     this.seedColor = 0xFF4F6F52,
     this.useDynamicColor = false,
     this.autoClipboard = true,
@@ -17,6 +20,7 @@ class AppSettings {
     this.fileNameTemplate = FileNaming.defaultTemplate,
   });
   final AppThemeMode themeMode;
+  final Handedness handedness;
   final int seedColor;
   final bool useDynamicColor, autoClipboard;
   final bool privacyMode, useOriginalFileName;
@@ -26,6 +30,7 @@ class AppSettings {
   final String privacyPasswordHash;
   AppSettings copyWith({
     AppThemeMode? themeMode,
+    Handedness? handedness,
     int? seedColor,
     bool? useDynamicColor,
     bool? autoClipboard,
@@ -37,6 +42,7 @@ class AppSettings {
     String? fileNameTemplate,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
+    handedness: handedness ?? this.handedness,
     seedColor: seedColor ?? this.seedColor,
     useDynamicColor: useDynamicColor ?? this.useDynamicColor,
     autoClipboard: autoClipboard ?? this.autoClipboard,
@@ -49,6 +55,7 @@ class AppSettings {
   );
   Map<String, Object?> toJson() => {
     'themeMode': themeMode.name,
+    'handedness': handedness.name,
     'seedColor': seedColor,
     'useDynamicColor': useDynamicColor,
     'autoClipboard': autoClipboard,
@@ -60,6 +67,7 @@ class AppSettings {
     'fileNameTemplate': fileNameTemplate,
   };
   factory AppSettings.fromJson(Map<String, Object?> m) => AppSettings(
+    handedness: m['handedness'] == 'left' ? Handedness.left : Handedness.right,
     themeMode:
         AppThemeMode.values
             .where((v) => v.name == m['themeMode'])

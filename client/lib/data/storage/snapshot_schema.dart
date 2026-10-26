@@ -61,6 +61,10 @@ class SnapshotSchema {
             return false;
           }
           if (!_bool(data['fallback'])) return false;
+          if (data['order'] != null) {
+            final order = (data['order'] as List).cast<String>();
+            if (order.toSet().length != order.length) return false;
+          }
           for (final raw in data['custom'] as List? ?? []) {
             ParseSource.fromJson(Map<String, dynamic>.from(raw as Map));
           }

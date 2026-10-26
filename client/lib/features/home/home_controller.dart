@@ -38,7 +38,7 @@ class HomeController extends ChangeNotifier {
 
   void setInput(String value) {
     if (_disposed) return;
-    cancelParse();
+    _cancelParse();
     input = value;
     result = null;
     error = null;
@@ -61,11 +61,10 @@ class HomeController extends ChangeNotifier {
     error = null;
     _notify();
     try {
-      final value = await dependencies.parser.parse(
+      final value = await dependencies.sources.runParse(
+        dependencies.parser,
         text,
-        sources: dependencies.sources.parseOrder,
-        autoFallback: dependencies.sources.autoFallback,
-        cancellation: cancellation,
+        cancellation,
       );
       if (!_disposed && generation == _generation) {
         result = value;
@@ -182,7 +181,8 @@ class HomeController extends ChangeNotifier {
   }
 
   void clear() {
-    cancelParse();
+    if (_disposed) return;
+    _cancelParse();
     input = '';
     result = null;
     error = null;
@@ -190,10 +190,16 @@ class HomeController extends ChangeNotifier {
   }
 
   void cancelParse() {
+    if (_disposed) return;
+    _cancelParse();
+    _notify();
+  }
+
+  void _cancelParse() {
     ++_generation;
     _cancellation?.cancel();
+    _cancellation = null;
     busy = false;
-    _notify();
   }
 
   @override

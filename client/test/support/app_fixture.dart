@@ -67,6 +67,17 @@ class UiDownloadBackend extends FakeDownloadBackend {
 }
 
 class FixtureParser extends ParseClient {
+  int mediaChecks = 0;
+  Future<void> Function(Uri, ParseCancellation)? verifyResponse;
+  @override
+  Future<void> verifyMedia(Uri url, ParseCancellation cancellation) async {
+    mediaChecks++;
+    if (cancellation.isCancelled) {
+      throw const AppFailure(FailureKind.cancelled, '已取消');
+    }
+    await verifyResponse?.call(url, cancellation);
+  }
+
   Future<MediaResult> Function(String, ParseCancellation)? respond;
   final calls = <String>[];
   @override

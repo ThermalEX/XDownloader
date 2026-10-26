@@ -28,7 +28,10 @@ class SourcesScreen extends StatefulWidget {
 }
 
 class _SourcesScreenState extends State<SourcesScreen> {
-  late final _health = SourceHealthController(widget.parser ?? ParseClient());
+  late final _health = SourceHealthController(
+    widget.parser ?? ParseClient(),
+    repository: repository,
+  );
   SourceRepository get repository => widget.repository;
   bool _exchanging = false;
   Future<void> _exchange(bool importing) => runAction(context, () async {
@@ -127,6 +130,9 @@ class _SourcesScreenState extends State<SourcesScreen> {
                 children: [
                   SwitchListTile(
                     title: const Text('失败后自动换源'),
+                    subtitle: const Text(
+                      '手选源优先，备用源按列表顺序尝试；菜单可调整顺序，近期失败的备用源暂时跳过',
+                    ),
                     value: repository.autoFallback,
                     onChanged: (value) =>
                         runAction(context, () => repository.setFallback(value)),
@@ -221,6 +227,11 @@ class _SourcesScreenState extends State<SourcesScreen> {
                                 const SnackBar(content: Text('已复制此源配置')),
                               );
                             }
+                          } else if (action == 'up' || action == 'down') {
+                            await repository.movePriority(
+                              source.id,
+                              action == 'up' ? -1 : 1,
+                            );
                           } else {
                             await Navigator.push(
                               context,
@@ -234,6 +245,16 @@ class _SourcesScreenState extends State<SourcesScreen> {
                           }
                         }),
                         itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'up',
+                            enabled: repository.list.first.id != source.id,
+                            child: const Text('提高优先级'),
+                          ),
+                          PopupMenuItem(
+                            value: 'down',
+                            enabled: repository.list.last.id != source.id,
+                            child: const Text('降低优先级'),
+                          ),
                           const PopupMenuItem(
                             value: 'export',
                             child: Text('导出此源'),

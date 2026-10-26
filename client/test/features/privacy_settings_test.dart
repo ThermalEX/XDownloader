@@ -427,6 +427,7 @@ void main() {
       await tester.ensureVisible(
         find.byKey(const Key('privacy_password_setting')),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('privacy_password_setting')));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);

@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 import 'package:xdownloader/core/models/download.dart';
+import 'package:xdownloader/core/models/app_settings.dart';
+import 'package:xdownloader/app/handed_layout.dart';
 import 'package:xdownloader/features/downloads/video_preview_screen.dart';
 import 'package:xdownloader/features/downloads/video_thumbnail.dart';
 import 'package:xdownloader/platform/platform_bridge.dart';
@@ -44,14 +46,43 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(platformChannel, null);
   });
-  Future<void> preview(WidgetTester tester) async {
+  Future<void> preview(WidgetTester tester, {bool leftHanded = false}) async {
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => HandedLayout(
+          handedness: leftHanded ? Handedness.left : Handedness.right,
+          child: child!,
+        ),
         home: VideoPreviewScreen(file: file, onOpenExternal: () async {}),
       ),
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'left-hand player groups actions left while keeping timeline direction',
+    (tester) async {
+      await preview(tester, leftHanded: true);
+      final time = find.textContaining(' / ');
+      expect(
+        tester.getCenter(find.byTooltip('全屏')).dx,
+        lessThan(tester.getCenter(time).dx),
+      );
+      expect(
+        Directionality.of(tester.element(find.byType(Slider))),
+        TextDirection.ltr,
+      );
+      await tester.tap(find.byTooltip('全屏'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byTooltip('返回')).right,
+        lessThanOrEqualTo(tester.getRect(find.byTooltip('屏幕方向').last).left),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('返回'));
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('single tap hides and reveals paused controls', (tester) async {
     await preview(tester);

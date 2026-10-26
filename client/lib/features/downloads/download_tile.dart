@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'video_thumbnail.dart';
 
+import '../../app/handed_layout.dart';
 import '../../core/models/download.dart';
 import '../../core/models/app_failure.dart';
 
@@ -58,6 +59,28 @@ class DownloadTile extends StatelessWidget {
       DownloadPhase.failed => '下载失败',
       DownloadPhase.cancelled => '已取消',
     };
+    final mirror = HandedLayout.isLeft(context) && !selectionMode;
+    final preview = selectionMode && r.phase.terminal
+        ? Checkbox(
+            value: selected,
+            onChanged: onSelect == null ? null : (_) => onSelect!(),
+          )
+        : (r.savedFile != null || r.request.coverUrl != null) &&
+              loadThumbnail != null
+        ? privateView(
+            VideoThumbnail(
+              locator: r.savedFile?.locator ?? r.request.coverUrl.toString(),
+              load: loadThumbnail!,
+            ),
+          )
+        : null;
+    final controls = !selectionMode && r.phase.terminal && onActions != null
+        ? IconButton(
+            tooltip: '下载操作',
+            onPressed: onActions,
+            icon: const Icon(Icons.more_vert),
+          )
+        : null;
     return Card.filled(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
@@ -81,21 +104,7 @@ class DownloadTile extends StatelessWidget {
             subtitle: Text(label),
             selected: selected,
             selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
-            leading: selectionMode && r.phase.terminal
-                ? Checkbox(
-                    value: selected,
-                    onChanged: onSelect == null ? null : (_) => onSelect!(),
-                  )
-                : (r.savedFile != null || r.request.coverUrl != null) &&
-                      loadThumbnail != null
-                ? privateView(
-                    VideoThumbnail(
-                      locator:
-                          r.savedFile?.locator ?? r.request.coverUrl.toString(),
-                      load: loadThumbnail!,
-                    ),
-                  )
-                : null,
+            leading: mirror ? controls : preview,
             onTap: selectionMode && r.phase.terminal
                 ? onSelect
                 : r.phase == DownloadPhase.completed &&
@@ -103,13 +112,7 @@ class DownloadTile extends StatelessWidget {
                 ? onOpen
                 : null,
             onLongPress: r.phase.terminal ? onSelect ?? onActions : null,
-            trailing: !selectionMode && r.phase.terminal && onActions != null
-                ? IconButton(
-                    tooltip: '下载操作',
-                    onPressed: onActions,
-                    icon: const Icon(Icons.more_vert),
-                  )
-                : null,
+            trailing: mirror ? preview : controls,
           ),
           if (r.phase == DownloadPhase.running) ...[
             Padding(

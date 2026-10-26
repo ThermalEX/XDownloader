@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/handed_layout.dart';
 import '../../data/repositories/download_repository.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/settings_repository.dart';
@@ -148,10 +149,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
+          actionsAlignment: HandedLayout.dialogAlignment(context),
           title: Text('删除 ${records.length} 个下载文件？'),
           content: const Text('将从设备中删除所选视频，并移除对应下载记录。下载历史仍会保留。此操作无法撤销。'),
           scrollable: true,
-          actions: [
+          actions: HandedLayout.actions(context, [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
               child: const Text('取消'),
@@ -160,7 +162,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               onPressed: () => Navigator.pop(c, true),
               child: const Text('删除文件'),
             ),
-          ],
+          ]),
         ),
       );
       if (confirmed != true || !mounted) return;
@@ -223,6 +225,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             else
               IntrinsicHeight(
                 child: Row(
+                  textDirection: HandedLayout.rowDirection(context),
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
@@ -296,6 +299,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               ),
             const Divider(height: 20),
             Row(
+              textDirection: HandedLayout.rowDirection(context),
               children: [
                 IconButton(
                   tooltip: '退出多选',
@@ -403,6 +407,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
+            actionsAlignment: HandedLayout.dialogAlignment(context),
             title: const Text('删除下载文件？'),
             content: Text(
               _private
@@ -410,7 +415,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   : '将从设备中删除“${record.request.displayName}”，并移除下载列表条目，保留下载历史。',
             ),
             scrollable: true,
-            actions: [
+            actions: HandedLayout.actions(context, [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text('取消'),
@@ -419,7 +424,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 onPressed: () => Navigator.pop(dialogContext, true),
                 child: const Text('删除文件'),
               ),
-            ],
+            ]),
           ),
         );
         if (confirmed == true && context.mounted) {
@@ -443,7 +448,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
-              alignment: Alignment.centerRight,
+              alignment: HandedLayout.actionAlignment(context),
               child: TextButton.icon(
                 key: const Key('download_history'),
                 icon: const Icon(Icons.history),

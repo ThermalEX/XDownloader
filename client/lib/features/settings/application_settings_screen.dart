@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_shell.dart';
+import '../../core/models/app_settings.dart';
 import '../../data/repositories/settings_repository.dart';
 
 import 'settings_group.dart';
@@ -19,6 +20,40 @@ class ApplicationSettingsScreen extends StatelessWidget {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            SettingsPanel(
+              title: '操作习惯',
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('左右手模式'),
+                    const SizedBox(height: 8),
+                    SegmentedButton<Handedness>(
+                      segments: const [
+                        ButtonSegment(
+                          value: Handedness.right,
+                          label: Text('右手'),
+                        ),
+                        ButtonSegment(
+                          value: Handedness.left,
+                          label: Text('左手'),
+                        ),
+                      ],
+                      selected: {repository.value.handedness},
+                      onSelectionChanged: (value) => runAction(
+                        context,
+                        () => repository.edit(
+                          (s) => s.copyWith(handedness: value.single),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('左手模式将操作按钮移到左侧，设置页面保持原样'),
+                  ],
+                ),
+              ),
+            ),
             SettingsPanel(
               title: '隐私保护',
               child: Column(

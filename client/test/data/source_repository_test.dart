@@ -1,3 +1,5 @@
+import 'package:xdownloader/core/parsing/source_catalog.dart';
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -35,7 +37,7 @@ void main() {
       await repo.setFallback(false);
       final restored = SourceRepository(store);
       await restored.initialize();
-      expect(restored.list.length, 8);
+      expect(restored.list.length, SourceCatalog.builtins.length + 1);
       expect(restored.parseOrder.first.id, 'custom');
       expect(restored.autoFallback, isFalse);
       await restored.remove('custom');
@@ -62,7 +64,7 @@ void main() {
         ),
         throwsA(isA<AppFailure>()),
       );
-      expect(repo.list.length, 7);
+      expect(repo.list.length, SourceCatalog.builtins.length);
       await Directory('${temp.path}/sources.json.tmp').create();
       await expectLater(repo.select('fx'), throwsA(isA<AppFailure>()));
       expect(repo.currentId, 'xdl');

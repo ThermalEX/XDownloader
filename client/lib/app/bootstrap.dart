@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../data/repositories/download_repository.dart';
+import '../data/repositories/download_retry_resolver.dart';
 import '../data/repositories/cover_cache_repository.dart';
 import '../data/repositories/source_repository.dart';
 import '../data/repositories/settings_repository.dart';
@@ -54,6 +55,11 @@ Future<AppDependencies> bootstrap() async {
   final store = SnapshotStore(Directory('$path/flutter_data'));
   final migration = await LegacyMigration(store, LegacyDataGateway()).run();
   final sources = SourceRepository(store);
+  final parser = ParseClient(onAttempt: sources.recordAttempt);
+  final retryResolver = DownloadRetryResolver(
+    parsePost: (input, cancellation) =>
+        sources.runParse(parser, input, cancellation),
+  );
   final settings = SettingsRepository(
     store,
     passwords: AndroidPrivacyPasswords(),
@@ -69,6 +75,7 @@ Future<AppDependencies> bootstrap() async {
     store: store,
     backend: backend,
     coverCache: covers,
+    refreshRequest: retryResolver.call,
   );
   final updates = UpdateRepository(
     store: store,
@@ -93,7 +100,7 @@ Future<AppDependencies> bootstrap() async {
       favorites: favorites,
       updates: updates,
       shares: ShareGateway(),
-      parser: ParseClient(),
+      parser: parser,
       migration: migration,
       prepareDownload: () async {
         // Notification permission is optional and never gates a file transfer.

@@ -47,11 +47,7 @@ class SourceExchange {
           source.name.trim(),
           source.endpoint.trim(),
           source.kind,
-          source.kind == SourceKind.xdl || source.kind == SourceKind.snap
-              ? 'POST'
-              : source.kind == SourceKind.scrape
-              ? source.method.toUpperCase()
-              : 'GET',
+          source.requestMethod,
           source.body,
           false,
         );
@@ -66,11 +62,7 @@ class SourceExchange {
   static String identity(ParseSource s) => jsonEncode([
     s.kind.name,
     s.endpoint.trim(),
-    s.kind == SourceKind.xdl || s.kind == SourceKind.snap
-        ? 'POST'
-        : s.kind == SourceKind.scrape
-        ? s.method.toUpperCase()
-        : 'GET',
+    s.requestMethod,
     s.kind == SourceKind.scrape && s.method.toUpperCase() == 'POST'
         ? s.body
         : '',

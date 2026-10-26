@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/handed_layout.dart';
 import '../../core/models/media.dart';
 
 class MediaResultView extends StatelessWidget {
@@ -47,6 +48,9 @@ class MediaResultView extends StatelessWidget {
               .surfaceContainerLow,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          controlAffinity: HandedLayout.isLeft(context)
+              ? ListTileControlAffinity.leading
+              : ListTileControlAffinity.trailing,
           title: const Text('帖子信息'),
           children: [
             if (result.thumbnail != null)
@@ -97,6 +101,7 @@ class MediaResultView extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
+                      textDirection: HandedLayout.rowDirection(context),
                       children: [
                         Expanded(
                           child: Column(

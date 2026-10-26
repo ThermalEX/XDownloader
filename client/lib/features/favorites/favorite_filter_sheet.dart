@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/handed_layout.dart';
 import '../../data/repositories/favorite_repository.dart';
 import '../../data/repositories/settings_repository.dart';
 import 'favorite_category_bar.dart';
@@ -107,6 +108,9 @@ class _FilterState extends State<FavoriteFilterSheet> {
                         onChanged: (_) => setState(_categories.clear),
                         title: const Text('全部'),
                         shape: shape,
+                        controlAffinity: HandedLayout.isLeft(context)
+                            ? ListTileControlAffinity.leading
+                            : ListTileControlAffinity.trailing,
                       ),
                       for (final group in ['', ...groups])
                         CheckboxListTile(
@@ -121,6 +125,9 @@ class _FilterState extends State<FavoriteFilterSheet> {
                           }),
                           title: Text(categoryLabel(group)),
                           shape: shape,
+                          controlAffinity: HandedLayout.isLeft(context)
+                              ? ListTileControlAffinity.leading
+                              : ListTileControlAffinity.trailing,
                         ),
                     ],
                   ),
@@ -129,6 +136,7 @@ class _FilterState extends State<FavoriteFilterSheet> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
+                  textDirection: HandedLayout.rowDirection(context),
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
