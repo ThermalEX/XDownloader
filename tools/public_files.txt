@@ -232,5 +232,11 @@ client/test/core/media_probe_test.dart
 client/test/data/source_optimization_test.dart
 client/test/features/home_notification_test.dart
 client/test/data/cover_cache_memory_test.dart
+client/lib/core/models/request_rotation.dart
+client/lib/core/parsing/request_profiles.dart
+client/lib/features/settings/request_rotation_dialog.dart
+client/test/core/request_profiles_test.dart
+client/test/data/request_rotation_test.dart
+client/test/features/request_rotation_ui_test.dart
 client/test/data/download_retry_refresh_test.dart
 client/test/data/download_retry_resolver_test.dart

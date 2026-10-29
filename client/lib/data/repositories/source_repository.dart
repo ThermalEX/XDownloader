@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/models/source.dart';
+import '../../core/models/request_rotation.dart';
+import '../../core/parsing/request_profiles.dart';
 import '../../core/parsing/source_catalog.dart';
 import '../../core/parsing/parse_client.dart';
 import '../../core/parsing/source_exchange.dart';
@@ -12,8 +14,31 @@ import '../storage/serial_queue.dart';
 
 class SourceRepository extends ChangeNotifier {
   SourceRepository(this.store, {DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+    : _now = now ?? DateTime.now,
+      requestProfiles = RequestProfiles(now: now);
   final DateTime Function() _now;
+  final RequestProfiles requestProfiles;
+  Map<String, RequestRotation> _rotation = {};
+  RequestRotation rotationFor(String id) =>
+      _rotation[id] ?? const RequestRotation();
+  Future<void> setRotation(String id, RequestRotation policy) =>
+      _queue.run(() async {
+        final source = list.where((s) => s.id == id).firstOrNull;
+        if (source == null || source.kind == SourceKind.vx) {
+          throw const AppFailure(FailureKind.malformed, '此源不支持请求配置轮换');
+        }
+        try {
+          policy.validate();
+        } on FormatException {
+          throw const AppFailure(FailureKind.malformed, '请求轮换频率超出范围');
+        }
+        await _save(
+          _custom,
+          _currentId,
+          _autoFallback,
+          rotation: {..._rotation, id: policy},
+        );
+      });
   List<String> _order = [];
   final _failedUntil = <String, DateTime>{};
   bool _disposed = false;
@@ -98,6 +123,14 @@ class SourceRepository extends ChangeNotifier {
       _currentId = m['current'] as String? ?? 'xdl';
       if (!list.any((s) => s.id == _currentId)) _currentId = 'xdl';
       _autoFallback = m['fallback'] != false;
+      _rotation = {
+        for (final entry in (m['rotation'] as Map? ?? {}).entries)
+          if (list.any((s) => s.id == entry.key && s.kind != SourceKind.vx))
+            entry.key as String: RequestRotation.fromJson(
+              Map<String, Object?>.from(entry.value as Map),
+            ),
+      };
+      requestProfiles.configure(_rotation);
     } on Exception catch (e) {
       throw AppFailure(FailureKind.storage, '解析源配置损坏，原数据已保留', '$e');
     }
@@ -108,17 +141,29 @@ class SourceRepository extends ChangeNotifier {
     String current,
     bool fallback, {
     List<String>? order,
+    Map<String, RequestRotation>? rotation,
   }) async {
+    final ids = [
+      ...SourceCatalog.builtins,
+      ...custom,
+    ].where((s) => s.kind != SourceKind.vx).map((s) => s.id).toSet();
+    final nextRotation = Map<String, RequestRotation>.of(rotation ?? _rotation)
+      ..removeWhere((id, _) => !ids.contains(id));
     await store.write('sources', {
       'custom': custom.map((s) => s.toJson()).toList(),
       'current': current,
       'fallback': fallback,
       'order': order ?? _order,
+      'rotation': nextRotation.map(
+        (id, policy) => MapEntry(id, policy.toJson()),
+      ),
     });
     _order = order ?? _order;
     _custom = custom;
     _currentId = current;
     _autoFallback = fallback;
+    _rotation = nextRotation;
+    requestProfiles.configure(_rotation);
     notifyListeners();
   }
 
@@ -151,6 +196,7 @@ class SourceRepository extends ChangeNotifier {
       _currentId,
       _autoFallback,
     );
+    requestProfiles.forget(id);
     return id;
   });
   Future<void> remove(String id) => _queue.run(() async {
@@ -226,6 +272,7 @@ class SourceRepository extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _failedUntil.clear();
+    requestProfiles.clear();
     super.dispose();
   }
 }

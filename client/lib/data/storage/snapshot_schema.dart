@@ -3,6 +3,7 @@ import '../../core/models/app_update.dart';
 import '../../core/models/download.dart';
 import '../../core/models/download_history.dart';
 import '../../core/models/source.dart';
+import '../../core/models/request_rotation.dart';
 import '../../core/models/favorite_link.dart';
 import '../../core/naming/file_naming.dart';
 
@@ -57,6 +58,12 @@ class SnapshotSchema {
             if (!ids.add(favorite.postId)) return false;
           }
         case 'sources':
+          for (final entry in (data['rotation'] as Map? ?? {}).entries) {
+            if (entry.key is! String) return false;
+            RequestRotation.fromJson(
+              Map<String, Object?>.from(entry.value as Map),
+            );
+          }
           if (data['current'] != null && data['current'] is! String) {
             return false;
           }

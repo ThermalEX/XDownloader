@@ -1,7 +1,7 @@
 name: xdownloader
 description: X video downloader with Flutter Material 3.
 publish_to: none
-version: 2.15.0+27
+version: 2.16.0-beta.1+28
 
 environment:
   sdk: ^3.13.5

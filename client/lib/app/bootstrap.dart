@@ -55,7 +55,10 @@ Future<AppDependencies> bootstrap() async {
   final store = SnapshotStore(Directory('$path/flutter_data'));
   final migration = await LegacyMigration(store, LegacyDataGateway()).run();
   final sources = SourceRepository(store);
-  final parser = ParseClient(onAttempt: sources.recordAttempt);
+  final parser = ParseClient(
+    onAttempt: sources.recordAttempt,
+    requestProfiles: sources.requestProfiles,
+  );
   final retryResolver = DownloadRetryResolver(
     parsePost: (input, cancellation) =>
         sources.runParse(parser, input, cancellation),

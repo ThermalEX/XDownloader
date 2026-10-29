@@ -8,6 +8,7 @@ import '../models/source.dart';
 import '../models/app_failure.dart';
 import 'post_link.dart';
 import 'source_parsers.dart';
+import 'request_profiles.dart';
 
 class ParseCancellation {
   final _cancelled = Completer<void>();
@@ -19,9 +20,14 @@ class ParseCancellation {
 }
 
 class ParseClient {
-  ParseClient({http.Client Function()? clientFactory, this.onAttempt})
-    : clientFactory = clientFactory ?? http.Client.new;
+  ParseClient({
+    http.Client Function()? clientFactory,
+    this.onAttempt,
+    RequestProfiles? requestProfiles,
+  }) : clientFactory = clientFactory ?? http.Client.new,
+       requestProfiles = requestProfiles ?? RequestProfiles();
   final http.Client Function() clientFactory;
+  final RequestProfiles requestProfiles;
   final void Function(String sourceId, bool success)? onAttempt;
   void _report(String id, bool success) {
     try {
@@ -52,13 +58,28 @@ class ParseClient {
     final timer = Timer(const Duration(seconds: 45), deadline.complete);
     AppFailure last = const AppFailure(FailureKind.server, '没有可用的解析源');
     try {
-      for (final source in sources.take(autoFallback ? 5 : 1)) {
+      var attempts = 0;
+      for (final source in autoFallback ? sources : sources.take(1)) {
         _checkCancelled(cancellation);
         if (deadline.isCompleted) {
           throw const AppFailure(FailureKind.timeout, '解析超时，请重试');
         }
+        final cooling = requestProfiles.cooldownRemaining(source.id);
+        if (cooling > Duration.zero) {
+          last = AppFailure(
+            FailureKind.server,
+            '解析源限流冷却中，请稍后重试',
+            '剩余 ${(cooling.inMilliseconds / 1000).ceil()} 秒',
+          );
+          continue;
+        }
+        if (attempts++ >= 5) break;
+        final profile = source.kind == SourceKind.vx
+            ? null
+            : requestProfiles.begin(source.id);
         final client = clientFactory();
         var active = true;
+        var completed = false;
         try {
           final response = await Future.any<http.Response>([
             _fetch(
@@ -67,6 +88,7 @@ class ParseClient {
               post,
               cancellation,
               () => active,
+              profile?.headers ?? const {},
             ).timeout(const Duration(seconds: 15)),
             cancellation.whenCancelled.then(
               (_) => throw const AppFailure(FailureKind.cancelled, '已取消解析'),
@@ -77,13 +99,7 @@ class ParseClient {
           ]);
           _checkCancelled(cancellation);
           if (response.statusCode < 200 || response.statusCode >= 300) {
-            throw AppFailure(
-              response.statusCode == 404
-                  ? FailureKind.noVideo
-                  : FailureKind.server,
-              '解析源暂时不可用',
-              'HTTP ${response.statusCode}',
-            );
+            throw _httpFailure(response);
           }
           final result = SourceParsers.decode(
             source,
@@ -91,20 +107,28 @@ class ParseClient {
             utf8.decode(response.bodyBytes, allowMalformed: true),
           );
           _report(source.id, true);
+          completed = true;
           return result;
         } on AppFailure catch (e) {
           if (e.kind == FailureKind.cancelled) rethrow;
+          completed = true;
           _report(source.id, false);
           last = e;
         } on TimeoutException {
+          completed = true;
           _report(source.id, false);
           last = const AppFailure(FailureKind.timeout, '解析超时，请重试');
         } on http.ClientException catch (e) {
+          _checkCancelled(cancellation);
+          completed = true;
           _report(source.id, false);
           last = AppFailure(FailureKind.network, '网络连接失败，请检查网络', e.message);
         } finally {
           active = false;
           client.close();
+          if (completed && !cancellation.isCancelled && profile != null) {
+            requestProfiles.complete(profile);
+          }
         }
       }
       _checkCancelled(cancellation);
@@ -118,24 +142,32 @@ class ParseClient {
     if (c.isCancelled) throw const AppFailure(FailureKind.cancelled, '已取消解析');
   }
 
-  static Future<http.Response> _fetch(
+  Future<http.Response> _fetch(
     http.Client client,
     ParseSource source,
     PostLink post,
     ParseCancellation cancellation,
     bool Function() active,
+    Map<String, String> profileHeaders,
   ) async {
-    final request = _request(source, post);
+    final request = _request(source, post)..headers.addAll(profileHeaders);
     if (source.kind == SourceKind.snap) {
       final homepage = request.url.resolve('/en2');
-      final page = await client.get(
-        homepage,
-        headers: {'user-agent': 'Mozilla/5.0', 'accept': 'text/html'},
+      final bootstrap = http.Request('GET', homepage)
+        ..headers.addAll({
+          'user-agent': 'Mozilla/5.0',
+          'accept': 'text/html',
+          ...profileHeaders,
+        });
+      final page = await _send(
+        client,
+        bootstrap,
+        source.id,
+        cancellation,
+        active,
       );
-      _checkCancelled(cancellation);
-      if (!active()) throw const AppFailure(FailureKind.cancelled, '解析已结束');
       if (page.statusCode != 200) {
-        throw const AppFailure(FailureKind.server, 'SnapTwitter 暂时不可用');
+        throw _httpFailure(page);
       }
       String? token;
       for (final input in RegExp(
@@ -162,8 +194,49 @@ class ParseClient {
             .replaceAll('&#39;', "'"),
       };
     }
-    return client.send(request).then(http.Response.fromStream);
+    return _send(client, request, source.id, cancellation, active);
   }
+
+  Future<http.Response> _send(
+    http.Client client,
+    http.Request request,
+    String sourceId,
+    ParseCancellation cancellation,
+    bool Function() active,
+  ) async {
+    _checkCancelled(cancellation);
+    if (!active()) throw const AppFailure(FailureKind.cancelled, '解析已结束');
+    final response = await client.send(request);
+    if (cancellation.isCancelled || !active()) {
+      await response.stream.listen((_) {}).cancel();
+      throw const AppFailure(FailureKind.cancelled, '解析已结束');
+    }
+    requestProfiles.recordResponse(
+      sourceId,
+      response.statusCode,
+      response.headers,
+    );
+    // Error pages are not parser input. Cancel their bodies immediately, even
+    // if the server stalls or resets them after sending Retry-After.
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      await response.stream.listen((_) {}).cancel();
+      return http.Response('', response.statusCode, headers: response.headers);
+    }
+    final body = await http.Response.fromStream(response);
+    _checkCancelled(cancellation);
+    if (!active()) throw const AppFailure(FailureKind.cancelled, '解析已结束');
+    return body;
+  }
+
+  static AppFailure _httpFailure(http.Response response) => AppFailure(
+    response.statusCode == 404 ? FailureKind.noVideo : FailureKind.server,
+    response.statusCode == 429 ||
+            (response.statusCode == 503 &&
+                response.headers.containsKey('retry-after'))
+        ? '解析源限流冷却中，请稍后重试'
+        : '解析源暂时不可用',
+    'HTTP ${response.statusCode}',
+  );
 
   static String expand(String template, PostLink post) => template
       .replaceAll('{urlenc}', Uri.encodeComponent(post.canonicalUrl.toString()))
