@@ -37,13 +37,11 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    repo.addListener(_acknowledgeReady);
     repo.setForegroundVisible(
       WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
       owner: this,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _acknowledgeReady());
     if (widget.check) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_check());
@@ -59,26 +57,14 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
     }
   }
 
-  void _acknowledgeReady() {
-    if (mounted &&
-        ModalRoute.of(context)?.isCurrent == true &&
-        (WidgetsBinding.instance.lifecycleState == null ||
-            WidgetsBinding.instance.lifecycleState ==
-                AppLifecycleState.resumed)) {
-      repo.acknowledgeInstallPrompt();
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     repo.setForegroundVisible(state == AppLifecycleState.resumed, owner: this);
-    if (state == AppLifecycleState.resumed) _acknowledgeReady();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    repo.removeListener(_acknowledgeReady);
     repo.setForegroundVisible(false, owner: this);
     super.dispose();
   }
@@ -246,27 +232,6 @@ class _DialogState extends State<AppUpdateDialog> with WidgetsBindingObserver {
 
 String _size(int value) => '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
 
-Future<void> showUpdateInstallDialog(
-  BuildContext context,
-  UpdateRepository repository,
-) => showDialog<void>(
-  context: context,
-  builder: (context) => AlertDialog(
-    title: const Text('更新已下载'),
-    scrollable: true,
-    content: ListenableBuilder(
-      listenable: repository,
-      builder: (context, _) => _UpdateTransferView(repository: repository),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('稍后'),
-      ),
-    ],
-  ),
-);
-
 class _UpdateTransferView extends StatelessWidget {
   const _UpdateTransferView({required this.repository});
   final UpdateRepository repository;
@@ -293,8 +258,8 @@ class _UpdateTransferView extends StatelessWidget {
           UpdatePhase.queued => '等待系统下载',
           UpdatePhase.running => '正在下载安装包',
           UpdatePhase.verifying => '正在校验安装包',
-          UpdatePhase.ready => '安装包已验证，可以继续安装',
-          UpdatePhase.permissionRequired => '请允许安装本应用提供的更新，然后继续安装',
+          UpdatePhase.ready => '安装包已验证，请在系统安装器中完成更新',
+          UpdatePhase.permissionRequired => '请允许安装本应用提供的更新，返回后将自动继续',
           UpdatePhase.failed => state.error ?? '下载失败，请检查更新后重试',
           UpdatePhase.cancelled => '已取消更新下载',
           _ => '',

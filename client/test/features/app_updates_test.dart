@@ -58,7 +58,7 @@ void main() {
       await reveal(tester, find.text('继续安装'));
       await tester.tap(find.text('继续安装'));
       await tester.pumpAndSettle();
-      expect(f.updateBackend.calls, ['install:old-ready']);
+      expect(f.updateBackend.calls, ['install:old-ready', 'install:old-ready']);
     }),
   );
   testWidgets(
@@ -121,7 +121,10 @@ void main() {
       await reveal(tester, find.text('继续安装'));
       await tester.tap(find.text('继续安装'));
       await tester.pumpAndSettle();
-      expect(f.updateBackend.calls, ['install:${update.candidateId}']);
+      expect(f.updateBackend.calls, [
+        'install:${update.candidateId}',
+        'install:${update.candidateId}',
+      ]);
       final browser = find.descendant(
         of: find.byType(AlertDialog),
         matching: find.byKey(const Key('update_dialog_release_page')),

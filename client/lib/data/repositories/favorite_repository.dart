@@ -23,7 +23,7 @@ class FavoriteRemoval {
 class FavoriteRepository extends ChangeNotifier {
   FavoriteRepository(this.store);
   final SnapshotStore store;
-  final _queue = SerialQueue();
+  SerialQueue get _queue => store.mutations;
   List<FavoriteLink> _items = [];
   List<String> _categories = [];
   FavoriteSort _sort = FavoriteSort.defaultOrder;
@@ -112,6 +112,13 @@ class FavoriteRepository extends ChangeNotifier {
 
   Future<void> setSort(FavoriteSort value) =>
       _queue.run(() => _save(_items, sort: value));
+  Future<void> reloadFromStore() async {
+    await initialize();
+    notifyListeners();
+  }
+
+  void notifyRestored() => notifyListeners();
+
   Future<bool> addCategory(String input) => _queue.run(() async {
     final name = input.trim();
     if (name.isEmpty || name.runes.length > 40) {

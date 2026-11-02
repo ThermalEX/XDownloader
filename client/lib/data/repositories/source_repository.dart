@@ -18,32 +18,48 @@ class SourceRepository extends ChangeNotifier {
       requestProfiles = RequestProfiles(now: now);
   final DateTime Function() _now;
   final RequestProfiles requestProfiles;
-  Map<String, RequestRotation> _rotation = {};
-  RequestRotation rotationFor(String id) =>
-      _rotation[id] ?? const RequestRotation();
-  Future<void> setRotation(String id, RequestRotation policy) =>
+  RequestRotation _protection = const RequestRotation();
+  RequestRotation get requestProtection => _protection;
+  Future<void> setRequestProtection(RequestRotation policy) =>
       _queue.run(() async {
-        final source = list.where((s) => s.id == id).firstOrNull;
-        if (source == null || source.kind == SourceKind.vx) {
-          throw const AppFailure(FailureKind.malformed, '此源不支持请求配置轮换');
-        }
         try {
           policy.validate();
         } on FormatException {
           throw const AppFailure(FailureKind.malformed, '请求轮换频率超出范围');
         }
-        await _save(
-          _custom,
-          _currentId,
-          _autoFallback,
-          rotation: {..._rotation, id: policy},
-        );
+        await _save(_custom, _currentId, _autoFallback, protection: policy);
       });
+
+  void _configureProtection() => requestProfiles.configure({
+    for (final source in list)
+      if (source.kind != SourceKind.vx) source.id: _protection,
+  });
+
+  RequestRotation _readProtection(Map<String, Object?> snapshot) {
+    if (snapshot['protection'] case final Map global) {
+      return RequestRotation.fromJson(Map<String, Object?>.from(global));
+    }
+    final legacy = snapshot['rotation'] as Map? ?? {};
+    final selectedFirst = [
+      ...list.where((s) => s.id == _currentId),
+      ...list.where((s) => s.id != _currentId),
+    ];
+    for (final source in selectedFirst) {
+      final value = legacy[source.id];
+      if (source.kind == SourceKind.vx || value == null) continue;
+      final policy = RequestRotation.fromJson(
+        Map<String, Object?>.from(value as Map),
+      );
+      if (policy.mode != RotationMode.off) return policy;
+    }
+    return const RequestRotation();
+  }
+
   List<String> _order = [];
   final _failedUntil = <String, DateTime>{};
   bool _disposed = false;
   final SnapshotStore store;
-  final _queue = SerialQueue();
+  SerialQueue get _queue => store.mutations;
   List<ParseSource> _custom = [];
   String _currentId = 'xdl';
   bool _autoFallback = true;
@@ -123,47 +139,41 @@ class SourceRepository extends ChangeNotifier {
       _currentId = m['current'] as String? ?? 'xdl';
       if (!list.any((s) => s.id == _currentId)) _currentId = 'xdl';
       _autoFallback = m['fallback'] != false;
-      _rotation = {
-        for (final entry in (m['rotation'] as Map? ?? {}).entries)
-          if (list.any((s) => s.id == entry.key && s.kind != SourceKind.vx))
-            entry.key as String: RequestRotation.fromJson(
-              Map<String, Object?>.from(entry.value as Map),
-            ),
-      };
-      requestProfiles.configure(_rotation);
+      _protection = _readProtection(m);
+      _configureProtection();
     } on Exception catch (e) {
       throw AppFailure(FailureKind.storage, '解析源配置损坏，原数据已保留', '$e');
     }
   }
+
+  Future<void> reloadFromStore() async {
+    await initialize();
+    notifyListeners();
+  }
+
+  void notifyRestored() => notifyListeners();
 
   Future<void> _save(
     List<ParseSource> custom,
     String current,
     bool fallback, {
     List<String>? order,
-    Map<String, RequestRotation>? rotation,
+    RequestRotation? protection,
   }) async {
-    final ids = [
-      ...SourceCatalog.builtins,
-      ...custom,
-    ].where((s) => s.kind != SourceKind.vx).map((s) => s.id).toSet();
-    final nextRotation = Map<String, RequestRotation>.of(rotation ?? _rotation)
-      ..removeWhere((id, _) => !ids.contains(id));
+    final nextProtection = protection ?? _protection;
     await store.write('sources', {
       'custom': custom.map((s) => s.toJson()).toList(),
       'current': current,
       'fallback': fallback,
       'order': order ?? _order,
-      'rotation': nextRotation.map(
-        (id, policy) => MapEntry(id, policy.toJson()),
-      ),
+      'protection': nextProtection.toJson(),
     });
     _order = order ?? _order;
     _custom = custom;
     _currentId = current;
     _autoFallback = fallback;
-    _rotation = nextRotation;
-    requestProfiles.configure(_rotation);
+    _protection = nextProtection;
+    _configureProtection();
     notifyListeners();
   }
 

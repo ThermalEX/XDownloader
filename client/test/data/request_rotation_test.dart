@@ -117,55 +117,113 @@ void main() {
     expect(headers[4], headers[3]);
   });
 
-  test(
-    'editing a custom source into VX clears its unsupported policy durably',
-    () async {
-      await repository.addCustom(source);
-      await repository.setRotation('a', countOne);
-      await repository.addCustom(
-        const ParseSource(
-          'a',
-          'A',
-          'https://source.test/a',
-          SourceKind.vx,
-          'GET',
-          '',
-          false,
-        ),
-      );
-      expect(repository.rotationFor('a').mode, RotationMode.off);
-      final restored = SourceRepository(store);
-      await restored.initialize();
-      expect(restored.rotationFor('a').mode, RotationMode.off);
-      restored.dispose();
-    },
-  );
+  test('editing a source into VX keeps the global setting and dedicated source identity', () async {
+    await repository.addCustom(source);
+    await repository.setRequestProtection(countOne);
+    await repository.addCustom(
+      const ParseSource(
+        'a',
+        'A',
+        'https://source.test/a',
+        SourceKind.vx,
+        'GET',
+        '',
+        false,
+      ),
+    );
+    expect(repository.requestProtection.mode, RotationMode.count);
+    final restored = SourceRepository(store);
+    await restored.initialize();
+    expect(restored.requestProtection.mode, RotationMode.count);
+    restored.dispose();
+  });
+
+  test('one global policy persists through source changes and applies to all supported sources', () async {
+    await repository.setRequestProtection(
+      const RequestRotation(RotationMode.minutes, 5),
+    );
+    await repository.select('snap');
+    await repository.setFallback(false);
+    await repository.addCustom(source);
+    final restored = SourceRepository(store);
+    await restored.initialize();
+    expect(restored.requestProtection.mode, RotationMode.minutes);
+    expect(restored.requestProtection.interval, 5);
+    for (final id in ['xdl', 'fx', 'snap', 'a']) {
+      expect(restored.requestProfiles.begin(id).headers, isNotEmpty);
+    }
+    expect(restored.requestProfiles.begin('vx').headers, isEmpty);
+    expect(restored.currentId, 'snap');
+    expect(restored.autoFallback, isFalse);
+    restored.dispose();
+    await expectLater(
+      repository.setRequestProtection(
+        const RequestRotation(RotationMode.count, 0),
+      ),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(repository.requestProtection.interval, 5);
+  });
+
+  for (final selected in ['snap', 'fx']) {
+    test(
+      'legacy source policies migrate to one global setting with selected=$selected',
+      () async {
+        await store.write('sources', {
+          'current': selected,
+          'custom': [],
+          'fallback': false,
+          'rotation': {
+            'xdl': {'mode': 'count', 'interval': 3},
+            'snap': {'mode': 'minutes', 'interval': 5},
+          },
+        });
+        await repository.initialize();
+        expect(
+          repository.requestProtection.interval,
+          selected == 'snap' ? 5 : 3,
+        );
+        await repository.setFallback(true);
+        final saved = await store.read('sources');
+        expect(saved.containsKey('rotation'), isFalse);
+        expect(
+          saved['protection'],
+          selected == 'snap'
+              ? {'mode': 'minutes', 'interval': 5}
+              : {'mode': 'count', 'interval': 3},
+        );
+      },
+    );
+  }
+
+  test('an explicit global off setting takes precedence over legacy enabled policies', () async {
+    await store.write('sources', {
+      'protection': {'mode': 'off', 'interval': 15},
+      'rotation': {
+        'xdl': {'mode': 'count', 'interval': 3},
+      },
+    });
+    await repository.initialize();
+    expect(repository.requestProtection.mode, RotationMode.off);
+    expect(repository.requestProfiles.begin('xdl').headers, isEmpty);
+  });
 
   test(
-    'policies persist through other source edits and restore independently',
+    'unrelated source settings preserve the active global-policy counters',
     () async {
-      await repository.setRotation('xdl', countOne);
-      await repository.setRotation(
-        'snap',
-        const RequestRotation(RotationMode.minutes, 5),
+      await repository.setRequestProtection(
+        const RequestRotation(RotationMode.count, 2),
       );
+      final first = repository.requestProfiles.begin('xdl');
+      repository.requestProfiles.complete(first);
       await repository.select('snap');
+      final second = repository.requestProfiles.begin('xdl');
+      expect(second.headers, first.headers);
+      repository.requestProfiles.complete(second);
       await repository.setFallback(false);
-      final restored = SourceRepository(store);
-      await restored.initialize();
-      expect(restored.rotationFor('xdl').mode, RotationMode.count);
-      expect(restored.rotationFor('snap').interval, 5);
-      expect(restored.rotationFor('fx').mode, RotationMode.off);
-      expect(restored.currentId, 'snap');
-      expect(restored.autoFallback, isFalse);
-      restored.dispose();
-      await expectLater(
-        repository.setRotation('vx', countOne),
-        throwsA(isA<AppFailure>()),
-      );
-      await expectLater(
-        repository.setRotation('missing', countOne),
-        throwsA(isA<AppFailure>()),
+      expect(
+        repository.requestProfiles.begin('xdl').headers,
+        isNot(first.headers),
       );
     },
   );
@@ -173,34 +231,32 @@ void main() {
   test(
     'failed policy writes leave visible and active policy unchanged',
     () async {
-      await repository.setRotation('xdl', countOne);
+      await repository.setRequestProtection(countOne);
       final capture = repository.requestProfiles.begin('xdl');
       await Directory('${temp.path}/sources.json.tmp').create();
       await expectLater(
-        repository.setRotation('xdl', const RequestRotation()),
+        repository.setRequestProtection(const RequestRotation()),
         throwsA(isA<AppFailure>()),
       );
-      expect(repository.rotationFor('xdl').mode, RotationMode.count);
+      expect(repository.requestProtection.mode, RotationMode.count);
       expect(repository.requestProfiles.begin('xdl').headers, capture.headers);
     },
   );
 
   test('invalid policy snapshot recovers last valid backup', () async {
-    await repository.setRotation('xdl', countOne);
+    await repository.setRequestProtection(countOne);
     await repository.select('fx');
     await File('${temp.path}/sources.json').writeAsString(
       jsonEncode({
         'version': 1,
         'data': {
-          'rotation': {
-            'xdl': {'mode': 'count', 'interval': 0},
-          },
+          'protection': {'mode': 'count', 'interval': 0},
         },
       }),
     );
     final restored = SourceRepository(store);
     await restored.initialize();
-    expect(restored.rotationFor('xdl').interval, 1);
+    expect(restored.requestProtection.interval, 1);
     restored.dispose();
   });
 
@@ -242,14 +298,14 @@ void main() {
   test(
     'token bootstrap and submit keep captured headers across policy edits',
     () async {
-      await repository.setRotation('snap', countOne);
+      await repository.setRequestProtection(countOne);
       final seen = <Map<String, String>>[];
       final parser = ParseClient(
         requestProfiles: repository.requestProfiles,
         clientFactory: () => FixtureClient((r) async {
           seen.add(Map.of(r.headers));
           if (r.method == 'GET') {
-            await repository.setRotation('snap', const RequestRotation());
+            await repository.setRequestProtection(const RequestRotation());
             return http.Response('<input name="token" value="abc">', 200);
           }
           expect(Uri.splitQueryString(r.body)['token'], 'abc');

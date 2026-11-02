@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/models/app_failure.dart';
 import '../../core/models/source.dart';
-import '../../core/models/request_rotation.dart';
-import 'request_rotation_dialog.dart';
 import '../../core/parsing/source_exchange.dart';
 
 import '../../app/app_shell.dart';
@@ -173,8 +171,6 @@ class _SourcesScreenState extends State<SourcesScreen> {
                   title: Text(source.name),
                   subtitle:
                       source.builtin &&
-                          repository.rotationFor(source.id).mode ==
-                              RotationMode.off &&
                           !_health.checking(source.id) &&
                           _health.result(source.id) == null
                       ? null
@@ -182,11 +178,6 @@ class _SourcesScreenState extends State<SourcesScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (repository.rotationFor(source.id).mode !=
-                                RotationMode.off)
-                              Text(
-                                '请求轮换 · ${repository.rotationFor(source.id).description}',
-                              ),
                             if (!source.builtin)
                               Text(
                                 source.endpoint,
@@ -240,14 +231,6 @@ class _SourcesScreenState extends State<SourcesScreen> {
                                 const SnackBar(content: Text('已复制此源配置')),
                               );
                             }
-                          } else if (action == 'rotation') {
-                            await showDialog<void>(
-                              context: context,
-                              builder: (_) => RequestRotationDialog(
-                                source: source,
-                                repository: repository,
-                              ),
-                            );
                           } else if (action == 'up' || action == 'down') {
                             await repository.movePriority(
                               source.id,
@@ -266,15 +249,6 @@ class _SourcesScreenState extends State<SourcesScreen> {
                           }
                         }),
                         itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: 'rotation',
-                            enabled: source.kind != SourceKind.vx,
-                            child: Text(
-                              source.kind == SourceKind.vx
-                                  ? '请求轮换（保留专用标识）'
-                                  : '请求配置轮换',
-                            ),
-                          ),
                           PopupMenuItem(
                             value: 'up',
                             enabled: repository.list.first.id != source.id,

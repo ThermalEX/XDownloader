@@ -200,6 +200,9 @@ enum UpdatePhase {
   cancelled,
 }
 
+/// Transient result of the native installation request, not persisted state.
+enum UpdateInstallOutcome { installer, permissionRequired, deferred }
+
 class UpdateTransfer {
   const UpdateTransfer({
     this.versionName,
@@ -209,11 +212,13 @@ class UpdateTransfer {
     this.bytes = 0,
     this.totalBytes,
     this.error,
+    this.installOutcome,
   });
   final String? candidateId, error;
   final String? versionName;
   final int? versionCode;
   final UpdatePhase phase;
+  final UpdateInstallOutcome? installOutcome;
   final int bytes;
   final int? totalBytes;
   bool get ready =>
@@ -233,5 +238,8 @@ class UpdateTransfer {
     bytes: m['bytes'] as int? ?? 0,
     totalBytes: m['totalBytes'] as int?,
     error: m['error'] as String?,
+    installOutcome: m['installOutcome'] == null
+        ? null
+        : UpdateInstallOutcome.values.byName(m['installOutcome'] as String),
   );
 }

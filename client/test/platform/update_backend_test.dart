@@ -7,6 +7,23 @@ import 'package:xdownloader/platform/android_update_backend.dart';
 import '../support/update_fixture.dart';
 
 void main() {
+  for (final outcome in UpdateInstallOutcome.values) {
+    test(
+      'install bridge preserves the native $outcome outcome separately from ready state',
+      () async {
+        final backend = AndroidUpdateBackend(
+          call: (method, args) async => {
+            'candidateId': 'saved',
+            'phase': 'ready',
+            'installOutcome': outcome.name,
+          },
+        );
+        final state = await backend.requestInstall('saved');
+        expect(state.phase, UpdatePhase.ready);
+        expect(state.installOutcome, outcome);
+      },
+    );
+  }
   test('update bridge uses isolated methods and candidate identity', () async {
     final calls = <String>[];
     final update = fixtureUpdate();

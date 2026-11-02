@@ -8,6 +8,7 @@ import '../data/repositories/source_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../data/repositories/favorite_repository.dart';
 import '../data/repositories/update_repository.dart';
+import '../data/repositories/backup_repository.dart';
 import '../data/updates/github_release_client.dart';
 import '../platform/android_update_backend.dart';
 import '../platform/android_privacy_passwords.dart';
@@ -31,6 +32,7 @@ class AppDependencies {
     required this.shares,
     required this.parser,
     required this.updates,
+    this.backups,
     Future<String?> Function()? readClipboard,
     Future<void> Function()? prepareDownload,
     this.migration,
@@ -45,6 +47,7 @@ class AppDependencies {
   final ShareGateway shares;
   final ParseClient parser;
   final UpdateRepository updates;
+  final BackupRepository? backups;
   final Future<String?> Function() readClipboard;
   final Future<void> Function() prepareDownload;
   final MigrationResult? migration;
@@ -53,6 +56,7 @@ class AppDependencies {
 Future<AppDependencies> bootstrap() async {
   final path = await callPlatform('supportDirectory', {}) as String;
   final store = SnapshotStore(Directory('$path/flutter_data'));
+  await store.recover();
   final migration = await LegacyMigration(store, LegacyDataGateway()).run();
   final sources = SourceRepository(store);
   final parser = ParseClient(
@@ -85,6 +89,13 @@ Future<AppDependencies> bootstrap() async {
     releases: GitHubReleaseClient(client: http.Client()),
     backend: AndroidUpdateBackend(),
   );
+  final backups = BackupRepository(
+    store: store,
+    settings: settings,
+    favorites: favorites,
+    sources: sources,
+    updates: updates,
+  );
   try {
     await sources.initialize();
     await settings.initialize();
@@ -96,12 +107,14 @@ Future<AppDependencies> bootstrap() async {
     await favorites.initialize();
     await downloads.initialize();
     await updates.initialize();
+    await backups.initialize();
     return AppDependencies(
       downloads: downloads,
       sources: sources,
       settings: settings,
       favorites: favorites,
       updates: updates,
+      backups: backups,
       shares: ShareGateway(),
       parser: parser,
       migration: migration,
@@ -115,6 +128,7 @@ Future<AppDependencies> bootstrap() async {
       },
     );
   } catch (_) {
+    backups.dispose();
     updates.dispose();
     downloads.dispose();
     sources.dispose();

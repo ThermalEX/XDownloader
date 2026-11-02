@@ -4,6 +4,7 @@ import '../../app/bootstrap.dart';
 import '../../core/naming/file_naming.dart';
 import 'sources_screen.dart';
 import 'naming_settings_screen.dart';
+import 'risk_protection_screen.dart';
 
 import 'settings_group.dart';
 
@@ -43,6 +44,25 @@ class RuleSettingsScreen extends StatelessWidget {
                     MaterialPageRoute<void>(
                       builder: (_) => NamingSettingsScreen(
                         repository: dependencies.settings,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SettingsPanel(
+                title: '风控',
+                child: ListTile(
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('风控保护'),
+                  subtitle: Text(
+                    dependencies.sources.requestProtection.description,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => RiskProtectionScreen(
+                        repository: dependencies.sources,
                       ),
                     ),
                   ),

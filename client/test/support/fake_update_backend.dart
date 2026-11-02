@@ -12,6 +12,7 @@ class FakeUpdateBackend implements UpdateBackend {
   Object? readError;
   final calls = <String>[];
   final pages = <Uri>[];
+  Future<UpdateTransfer> Function(String)? installResponse;
   @override
   Future<InstalledAppInfo> installedApp() async {
     if (readError != null) throw readError!;
@@ -48,6 +49,7 @@ class FakeUpdateBackend implements UpdateBackend {
   @override
   Future<UpdateTransfer> requestInstall(String candidateId) async {
     calls.add('install:$candidateId');
+    if (installResponse != null) return installResponse!(candidateId);
     return transfer;
   }
 

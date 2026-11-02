@@ -4,17 +4,20 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
 import java.io.File
 
 /** Activity launches run on the main thread; verification runs before this gateway. */
 object UpdateInstallGateway {
-    fun install(activity: MainActivity, file: File): Boolean {
+    fun install(activity: MainActivity, file: File): String {
+        // Verification/copying may outlast the foreground request from Dart.
+        if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return "deferred"
         if (!activity.packageManager.canRequestPackageInstalls()) {
             activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}")))
-            return false
+            return "permissionRequired"
         }
         activity.startActivity(installerIntent(activity, file))
-        return true
+        return "installer"
     }
     fun installerIntent(activity: MainActivity, file: File): Intent {
         val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)

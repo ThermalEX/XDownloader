@@ -8,6 +8,7 @@ import 'storage_settings_screen.dart';
 import 'about_screen.dart';
 import 'settings_group.dart';
 import 'app_updates_screen.dart';
+import 'backup_sync_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.dependencies, this.onOpenTab});
@@ -46,6 +47,13 @@ class SettingsScreen extends StatelessWidget {
               Icons.folder_outlined,
               StorageSettingsScreen(repository: dependencies.downloads),
             ),
+            if (dependencies.backups case final backups?)
+              entry(
+                '备份与同步',
+                '本地存档、WebDAV 与多设备恢复',
+                Icons.cloud_sync_outlined,
+                BackupSyncScreen(repository: backups),
+              ),
           ],
         ),
         SettingsGroup(

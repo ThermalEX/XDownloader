@@ -14,6 +14,7 @@ import '../features/downloads/downloads_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/favorites/favorites_screen.dart';
 import '../features/settings/app_update_dialog.dart';
+import '../features/settings/backup_sync_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.dependencies});
@@ -31,6 +32,8 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _backgrounded = false;
   bool _homeInitialized = false;
   bool _resumeHomePending = false;
+  bool _backupPromptPending = false, _backupPromptScheduled = false;
+  bool _startupDialogOpen = false;
   int index = 0;
   @override
   void initState() {
@@ -38,6 +41,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     home = HomeController(widget.dependencies);
     WidgetsBinding.instance.addObserver(this);
     widget.dependencies.updates.addListener(_scheduleUpdatePrompt);
+    widget.dependencies.backups?.addListener(_scheduleBackupPrompt);
     widget.dependencies.updates.setForegroundVisible(
       WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
@@ -47,8 +51,87 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_checkAtStartup());
+        unawaited(_checkBackupAtStartup());
       }
     });
+  }
+
+  Future<void> _checkBackupAtStartup() async {
+    final backups = widget.dependencies.backups;
+    if (backups == null) return;
+    await backups.checkAtStartup();
+    if (!mounted || backups.isPrivate || backups.pendingCloudCount == 0) return;
+    _backupPromptPending = true;
+    _scheduleBackupPrompt();
+  }
+
+  void _scheduleBackupPrompt() {
+    if (!mounted || !_backupPromptPending || _backupPromptScheduled) return;
+    _backupPromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _backupPromptScheduled = false;
+      if (!mounted ||
+          _startupDialogOpen ||
+          ModalRoute.of(context)?.isCurrent != true ||
+          (WidgetsBinding.instance.lifecycleState != null &&
+              WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed)) {
+        return;
+      }
+      final backups = widget.dependencies.backups;
+      if (backups == null ||
+          backups.isPrivate ||
+          backups.pendingCloudCount == 0) {
+        return;
+      }
+      _backupPromptPending = false;
+      _startupDialogOpen = true;
+      unawaited(
+        showDialog<bool>(
+              context: context,
+              builder: (dialogContext) => ListenableBuilder(
+                listenable: backups,
+                builder: (_, _) => AlertDialog(
+                  title: Text(backups.isPrivate ? '备份与同步' : '发现云端存档'),
+                  content: Text(
+                    backups.isPrivate
+                        ? '隐私模式下不可查看或备份'
+                        : '发现 ${backups.pendingCloudCount} 份未处理的云端存档，可选择下载，随后合并或覆盖。',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('稍后'),
+                    ),
+                    if (!backups.isPrivate)
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('查看存档'),
+                      ),
+                  ],
+                ),
+              ),
+            )
+            .then((open) async {
+              if (open == true && mounted && !backups.isPrivate) {
+                await Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => cloudBackupArchives(backups),
+                  ),
+                );
+              }
+            })
+            .whenComplete(() {
+              _startupDialogOpen = false;
+              if (mounted) {
+                _scheduleUpdatePrompt();
+                _scheduleBackupPrompt();
+              }
+            }),
+      );
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _checkAtStartup() async {
@@ -60,10 +143,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _scheduleUpdatePrompt() {
-    if (!mounted ||
-        (_pendingStartup == null &&
-            !widget.dependencies.updates.needsInstallPrompt) ||
-        _promptScheduled) {
+    if (!mounted || _pendingStartup == null || _promptScheduled) {
       return;
     }
     _promptScheduled = true;
@@ -76,17 +156,12 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _showPendingUpdatePrompt() {
     if (!mounted) return;
+    if (_startupDialogOpen) return;
     final updates = widget.dependencies.updates;
     if (ModalRoute.of(context)?.isCurrent != true ||
         (WidgetsBinding.instance.lifecycleState != null &&
             WidgetsBinding.instance.lifecycleState !=
                 AppLifecycleState.resumed)) {
-      return;
-    }
-    if (updates.needsInstallPrompt) {
-      updates.acknowledgeInstallPrompt();
-      _pendingStartup = null;
-      unawaited(showUpdateInstallDialog(context, updates));
       return;
     }
     if (_pendingStartup == null) return;
@@ -103,13 +178,23 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     // A newer check or channel change invalidates the accepted startup result.
     if (updates.checking) return;
     _pendingStartup = null;
-    unawaited(showAppUpdateDialog(context, updates));
+    _startupDialogOpen = true;
+    unawaited(
+      showAppUpdateDialog(context, updates).whenComplete(() {
+        _startupDialogOpen = false;
+        if (mounted) {
+          _scheduleBackupPrompt();
+          _scheduleUpdatePrompt();
+        }
+      }),
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _scheduleUpdatePrompt();
+    _scheduleBackupPrompt();
   }
 
   Future<void> _listen() async {
@@ -173,6 +258,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _backgrounded = false;
       _scheduleUpdatePrompt();
+      _scheduleBackupPrompt();
       unawaited(runAction(context, widget.dependencies.downloads.reconcile));
       if (_homeInitialized) {
         unawaited(runAction(context, home.onResumed));
@@ -186,6 +272,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.dependencies.updates.removeListener(_scheduleUpdatePrompt);
+    widget.dependencies.backups?.removeListener(_scheduleBackupPrompt);
     widget.dependencies.updates.setForegroundVisible(false, owner: this);
     unawaited(_shares?.cancel());
     home.dispose();

@@ -18,7 +18,7 @@ class UpdateRepository extends ChangeNotifier {
   final SnapshotStore store;
   final GitHubReleaseClient releases;
   final UpdateBackend backend;
-  final _queue = SerialQueue();
+  SerialQueue get _queue => store.mutations;
   UpdatePreferences _preferences = const UpdatePreferences();
   UpdatePreferences get preferences => _preferences;
   InstalledAppInfo? _installed;
@@ -36,20 +36,62 @@ class UpdateRepository extends ChangeNotifier {
   int _generation = 0, _transferGeneration = 0;
   Timer? _timer;
   final _foregroundOwners = <Object>{};
-  String? _promptedInstallId;
-  bool get needsInstallPrompt =>
-      transfer.ready &&
-      transfer.candidateId != null &&
-      transfer.candidateId != _promptedInstallId;
+  String? _attemptedInstallId;
+  bool _waitingInstallPermission = false, _autoInstallScheduled = false;
+  bool _resumeRefreshPending = false;
+  int _foregroundEpoch = 0;
+  int? _deferredInstallEpoch;
+  Future<void>? _installing;
 
-  void acknowledgeInstallPrompt() {
-    if (transfer.ready) _promptedInstallId = transfer.candidateId;
+  void _setTransfer(UpdateTransfer next) {
+    if (next.candidateId != transfer.candidateId) {
+      _attemptedInstallId = null;
+      _waitingInstallPermission = false;
+      _deferredInstallEpoch = null;
+    }
+    if (next.installOutcome == UpdateInstallOutcome.installer) {
+      _waitingInstallPermission = false;
+    } else if (next.phase == UpdatePhase.permissionRequired ||
+        next.installOutcome == UpdateInstallOutcome.permissionRequired) {
+      _waitingInstallPermission = true;
+    }
+    if (next.phase == UpdatePhase.ready && _waitingInstallPermission) {
+      // Native snapshot returns ready only after unknown-source consent exists.
+      _waitingInstallPermission = false;
+      _attemptedInstallId = null;
+    }
+    _transfer = next;
+  }
+
+  bool get _canAutoInstall =>
+      !_disposed &&
+      _foregroundOwners.isNotEmpty &&
+      transfer.phase == UpdatePhase.ready &&
+      transfer.candidateId != null &&
+      (_deferredInstallEpoch == null ||
+          _foregroundEpoch > _deferredInstallEpoch!) &&
+      transfer.candidateId != _attemptedInstallId;
+
+  void _scheduleAutoInstall() {
+    if (_autoInstallScheduled || operating || !_canAutoInstall) return;
+    _autoInstallScheduled = true;
+    scheduleMicrotask(() async {
+      try {
+        if (_canAutoInstall) await _install(automatic: true);
+      } catch (_) {
+        // _operate exposes the error and leaves manual installation retryable.
+      } finally {
+        _autoInstallScheduled = false;
+        _scheduleAutoInstall();
+      }
+    });
   }
 
   void _notify() {
     if (!_disposed) {
       _syncPolling();
       notifyListeners();
+      _scheduleAutoInstall();
     }
   }
 
@@ -78,7 +120,7 @@ class UpdateRepository extends ChangeNotifier {
       _installed = info;
       final state = await backend.snapshot();
       if (_disposed) return;
-      _transfer = state;
+      _setTransfer(state);
       _error = null;
     } catch (e) {
       if (_disposed) return;
@@ -91,6 +133,20 @@ class UpdateRepository extends ChangeNotifier {
     await store.write('updates', next.toJson());
     if (!_disposed) _preferences = next;
   }
+
+  Future<void> reloadFromStore({bool notify = true}) async {
+    final next = UpdatePreferences.fromJson(await store.read('updates'));
+    if (next.channel != _preferences.channel) {
+      _generation++;
+      releases.cancelCheck();
+      _checking = false;
+      _result = null;
+    }
+    _preferences = next;
+    if (notify) _notify();
+  }
+
+  void notifyRestored() => _notify();
 
   Future<void> setAutoCheck(bool enabled) => _queue.run(() async {
     if (_disposed) return;
@@ -173,6 +229,7 @@ class UpdateRepository extends ChangeNotifier {
     } finally {
       _operating = false;
       _notify();
+      _refreshAfterResume();
     }
   });
   Future<void> download() => _operate(() async {
@@ -184,22 +241,36 @@ class UpdateRepository extends ChangeNotifier {
       throw const AppFailure(FailureKind.cancelled, '已有更新下载，请先完成或取消');
     }
     await backend.enqueue(candidate, candidate.assets.first);
-    _promptedInstallId = null;
-    _transfer = await backend.snapshot();
+    _attemptedInstallId = null;
+    _waitingInstallPermission = false;
+    _deferredInstallEpoch = null;
+    _setTransfer(await backend.snapshot());
   });
   Future<void> cancelDownload() => _operate(() async {
     final id = transfer.candidateId;
     if (id == null) return;
     await backend.cancel(id);
-    _transfer = await backend.snapshot();
+    _setTransfer(await backend.snapshot());
   });
-  Future<void> install() => _operate(() async {
-    final id = transfer.candidateId;
-    if (id == null || !transfer.ready) {
-      throw const AppFailure(FailureKind.cancelled, '请先下载更新');
-    }
-    _transfer = await backend.requestInstall(id);
-  });
+  Future<void> install() => _install();
+  Future<void> _install({bool automatic = false}) =>
+      _installing ??= _operate(() async {
+        // Recheck inside the serial queue: cancel/background may win the race.
+        if (automatic && !_canAutoInstall) return;
+        final id = transfer.candidateId;
+        if (id == null || !transfer.ready) {
+          throw const AppFailure(FailureKind.cancelled, '请先下载更新');
+        }
+        final epoch = _foregroundEpoch;
+        _attemptedInstallId = id;
+        _deferredInstallEpoch = null;
+        final state = await backend.requestInstall(id);
+        _setTransfer(state);
+        if (state.installOutcome == UpdateInstallOutcome.deferred) {
+          _attemptedInstallId = null;
+          _deferredInstallEpoch = epoch;
+        }
+      }).whenComplete(() => _installing = null);
   Future<void> refreshTransfer() async {
     if (_disposed || _refreshing || operating) return;
     _refreshing = true;
@@ -207,7 +278,7 @@ class UpdateRepository extends ChangeNotifier {
     try {
       final state = await backend.snapshot();
       if (!_disposed && generation == _transferGeneration) {
-        _transfer = state;
+        _setTransfer(state);
         _notify();
       }
     } catch (e) {
@@ -217,18 +288,33 @@ class UpdateRepository extends ChangeNotifier {
       }
     } finally {
       _refreshing = false;
+      _refreshAfterResume();
     }
   }
 
   void setForegroundVisible(bool visible, {Object? owner}) {
     if (_disposed) return;
     if (visible) {
+      _foregroundEpoch++;
       _foregroundOwners.add(owner ?? this);
-      unawaited(refreshTransfer());
+      _resumeRefreshPending = true;
+      _refreshAfterResume();
     } else {
       _foregroundOwners.remove(owner ?? this);
     }
     _syncPolling();
+  }
+
+  void _refreshAfterResume() {
+    if (!_resumeRefreshPending ||
+        _disposed ||
+        _foregroundOwners.isEmpty ||
+        operating ||
+        _refreshing) {
+      return;
+    }
+    _resumeRefreshPending = false;
+    unawaited(refreshTransfer());
   }
 
   void _syncPolling() {

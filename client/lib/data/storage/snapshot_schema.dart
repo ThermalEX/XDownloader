@@ -58,6 +58,11 @@ class SnapshotSchema {
             if (!ids.add(favorite.postId)) return false;
           }
         case 'sources':
+          if (data['protection'] case final Object protection) {
+            RequestRotation.fromJson(
+              Map<String, Object?>.from(protection as Map),
+            );
+          }
           for (final entry in (data['rotation'] as Map? ?? {}).entries) {
             if (entry.key is! String) return false;
             RequestRotation.fromJson(

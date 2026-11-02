@@ -32,7 +32,7 @@ Future<void> checkManually(WidgetTester tester) async {
 
 void main() {
   testWidgets(
-    'recovered ready package waits for foreground and requires installation tap',
+    'recovered ready package waits for foreground then opens installer once',
     (tester) => withAppFixture(tester, (f) async {
       await f.updates.setShowUpdatePrompt(false);
       f.updateBackend.transfer = UpdateTransfer(
@@ -44,24 +44,20 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
       await tester.pumpAndSettle();
-      expect(find.text('更新已下载'), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, isEmpty);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
-      expect(find.text('更新已下载'), findsOneWidget);
-      expect(f.updateBackend.calls, isEmpty);
-      f.updateBackend.transfer = UpdateTransfer(
-        candidateId: fixtureUpdate().candidateId,
-        versionName: '2.5.0',
-        phase: UpdatePhase.permissionRequired,
-      );
-      await tester.tap(find.text('继续安装'));
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, ['install:${fixtureUpdate().candidateId}']);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(f.updateBackend.calls, ['install:${fixtureUpdate().candidateId}']);
-      expect(find.text('请允许安装本应用提供的更新，然后继续安装'), findsOneWidget);
     }),
   );
   testWidgets(
-    'ready package in the open update window does not produce another prompt',
+    'ready package in the open update window opens installer without another tap',
     (tester) => withAppFixture(tester, (f) async {
       await f.updates.setAutoCheck(true);
       f.releaseClient.respond = (_) async => availableUpdate();
@@ -80,11 +76,14 @@ void main() {
       await tester.tap(find.text('关闭'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
-      expect(f.updateBackend.calls, ['enqueue']);
+      expect(f.updateBackend.calls, [
+        'enqueue',
+        'install:${fixtureUpdate().candidateId}',
+      ]);
     }),
   );
   testWidgets(
-    'download finishing under a subpage prompts once after returning',
+    'download finishing under a subpage opens installer without returning home',
     (tester) => withAppFixture(tester, (f) async {
       f.releaseClient.respond = (_) async => availableUpdate();
       await f.updates.check();
@@ -110,9 +109,17 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, [
+        'enqueue',
+        'install:${fixtureUpdate().candidateId}',
+      ]);
       navigator.pop();
       await tester.pumpAndSettle();
-      expect(find.text('更新已下载'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, [
+        'enqueue',
+        'install:${fixtureUpdate().candidateId}',
+      ]);
     }),
   );
   testWidgets(
@@ -169,7 +176,7 @@ void main() {
     }),
   );
   testWidgets(
-    'startup offers download in dialog and never installs automatically',
+    'startup offers download and opens installer only after the package is ready',
     (tester) => withAppFixture(tester, (f) async {
       await f.updates.setAutoCheck(true);
       f.releaseClient.respond = (_) async => availableUpdate();
@@ -218,10 +225,11 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('更新已下载'), findsOneWidget);
-      expect(f.updateBackend.calls, ['enqueue']);
-      await tester.tap(find.text('稍后'));
-      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.updateBackend.calls, [
+        'enqueue',
+        'install:${fixtureUpdate().candidateId}',
+      ]);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();

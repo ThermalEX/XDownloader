@@ -16,6 +16,7 @@ class MainActivity : FlutterActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val privacyExecutor = Executors.newSingleThreadExecutor()
     private val playbackControls by lazy { PlaybackWindowControls(this) }
+    private val backups by lazy { BackupPlatformGateway(this) }
     private val waitingForPermission = mutableListOf<Pair<MethodCall, MethodChannel.Result>>()
     private val notificationResults = mutableListOf<MethodChannel.Result>()
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -48,6 +49,7 @@ class MainActivity : FlutterActivity() {
             }
     }
     private fun dispatch(call: MethodCall, result: MethodChannel.Result) {
+        if (backups.handle(call, result)) return
         if (call.method == "privacyDerive") {
             privacyExecutor.execute {
                 try {
@@ -115,9 +117,10 @@ class MainActivity : FlutterActivity() {
                     val file = updates.verifiedFile(id)
                     runOnUiThread {
                         try {
-                            if (!UpdateInstallGateway.install(this, file)) updates.permissionRequired(id)
+                            val outcome = UpdateInstallGateway.install(this, file)
+                            if (outcome == "permissionRequired") updates.permissionRequired(id)
                             executor.execute {
-                                try { result.success(updates.snapshot()) }
+                                try { result.success(updates.snapshot() + ("installOutcome" to outcome)) }
                                 catch (e: Exception) { result.error("update", e.message, null) }
                             }
                         } catch (e: Exception) { result.error("update", e.message, null) }
@@ -136,9 +139,14 @@ class MainActivity : FlutterActivity() {
         }
     }
     override fun onDestroy() {
+        backups.onDestroy()
         privacyExecutor.shutdown()
         playbackControls.end()
         super.onDestroy()
+    }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (backups.onActivityResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

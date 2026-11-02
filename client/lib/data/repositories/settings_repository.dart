@@ -11,12 +11,22 @@ class SettingsRepository extends ChangeNotifier {
     : _passwords = passwords ?? PrivacyPasswords();
   final SnapshotStore store;
   final PrivacyPasswords _passwords;
-  final _queue = SerialQueue();
+  SerialQueue get _queue => store.mutations;
   AppSettings _value = const AppSettings();
+  bool _privacyRequested = false;
+  bool get privacyGuarded => _privacyRequested || _value.privacyMode;
   AppSettings get value => _value;
   Future<void> initialize() async {
     _value = AppSettings.fromJson(await store.read('settings'));
   }
+
+  /// Called by the backup coordinator while holding store.mutations.
+  Future<void> reloadFromStore() async {
+    await initialize();
+    notifyListeners();
+  }
+
+  void notifyRestored() => notifyListeners();
 
   Future<void> update(AppSettings next) => edit((_) => next);
   Future<void> edit(AppSettings Function(AppSettings current) transform) =>
@@ -50,7 +60,17 @@ class SettingsRepository extends ChangeNotifier {
   }
 
   Future<void> setPrivacyMode(bool enabled, {String password = ''}) async {
-    if (enabled) return edit((s) => s.copyWith(privacyMode: true));
+    if (enabled) {
+      _privacyRequested = true;
+      notifyListeners();
+      try {
+        await edit((s) => s.copyWith(privacyMode: true));
+      } finally {
+        _privacyRequested = false;
+        notifyListeners();
+      }
+      return;
+    }
     if (!await tryUnlockPrivacy(password)) {
       throw const AppFailure(FailureKind.cancelled, '密码不正确');
     }
