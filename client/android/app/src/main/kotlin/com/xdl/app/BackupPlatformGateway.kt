@@ -118,7 +118,7 @@ internal class BackupPlatformGateway(private val activity: Activity) {
                 pending.pickerOutstanding = true
                 val intent = Intent(if (export) Intent.ACTION_CREATE_DOCUMENT else Intent.ACTION_OPEN_DOCUMENT)
                     .addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType(if (export) "application/json" else "*/*")
+                    .setType(if (export) "application/zip" else "*/*")
                 if (export) intent.putExtra(Intent.EXTRA_TITLE, name)
                 try {
                     activity.startActivityForResult(intent, pending.requestCode)

@@ -271,9 +271,11 @@ class WebDavClient {
         entry.uri,
         expected: const {200, 201, 204},
         maxBytes: 64 * 1024,
-        headers: const {
+        headers: {
           'If-None-Match': '*',
-          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Type': probe
+              ? 'application/json; charset=utf-8'
+              : 'application/zip',
         },
         body: bytes,
       );
@@ -659,7 +661,7 @@ bool _archiveName(String name) =>
     name.isNotEmpty &&
     name.length <= 240 &&
     _safeComponent(name) &&
-    name.endsWith('.xdlbackup.json');
+    name.endsWith('.zip');
 
 bool _isDav(XmlElement element, String local) =>
     element.name.local == local && element.name.namespaceUri == 'DAV:';

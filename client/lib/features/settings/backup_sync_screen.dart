@@ -359,9 +359,7 @@ class _ConfigScreenState extends State<_ConfigScreen> {
   void initState() {
     super.initState();
     final config = widget.repository.config;
-    _endpoint = TextEditingController(
-      text: config?.endpoint.toString() ?? 'https://',
-    );
+    _endpoint = TextEditingController(text: config?.endpoint.toString() ?? '');
     _username = TextEditingController(text: config?.username ?? '');
     _password = TextEditingController();
     _folder = TextEditingController(text: config?.folder ?? 'XDownloader');
@@ -426,6 +424,7 @@ class _ConfigScreenState extends State<_ConfigScreen> {
     Key? key,
     bool secret = false,
     String? helper,
+    String? hint,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
     child: TextField(
@@ -436,6 +435,11 @@ class _ConfigScreenState extends State<_ConfigScreen> {
       enableSuggestions: !secret,
       decoration: InputDecoration(
         labelText: name,
+        hintText: hint,
+        floatingLabelBehavior: hint == null
+            ? FloatingLabelBehavior.auto
+            : FloatingLabelBehavior.always,
+        hintStyle: TextStyle(color: Theme.of(context).hintColor),
         helperText: helper,
         helperMaxLines: 4,
         border: const OutlineInputBorder(),
@@ -450,13 +454,14 @@ class _ConfigScreenState extends State<_ConfigScreen> {
       const Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
         child: Text(
-          '存档是普通 JSON 数据，可能含私人收藏链接和自定义源令牌，将保存在你自己的 WebDAV 目录。SHA-256 只校验完整性。',
+          '存档是未加密的 ZIP 数据包，可能含私人收藏链接和自定义源令牌，将保存在你自己的 WebDAV 目录。SHA-256 只校验完整性。',
         ),
       ),
       _field(
         '服务器地址',
         _endpoint,
         key: const Key('webdav_endpoint'),
+        hint: 'https://dav.example.com/dav/',
         helper: '推荐 HTTPS；地址不能包含用户名、密码或查询参数',
       ),
       _field('用户名', _username),
@@ -590,12 +595,12 @@ class _ArchiveListScreenState extends State<_ArchiveListScreen> {
                   child: ListTile(
                     key: Key('remote_${entry.fingerprint}'),
                     title: Text(
-                      entry.name,
+                      entry.name.replaceFirst(RegExp(r'\.zip$'), ''),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      '云端修改时间：${_time(entry.modifiedAt)}\n${_size(entry.bytes)}\n设备和内容：下载校验后查看',
+                      '云端修改时间：${_time(entry.modifiedAt)}\n${_size(entry.bytes)}\n内容：下载校验后查看',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: repository.busy
@@ -796,7 +801,7 @@ class _RemoteDetailScreenState extends State<_RemoteDetailScreen> {
           child: Text(entry.name),
         ),
         Text(
-          '云端修改时间：${_time(entry.modifiedAt)}\n${_size(entry.bytes)}\n设备和内容：下载校验后查看',
+          '云端修改时间：${_time(entry.modifiedAt)}\n${_size(entry.bytes)}\n内容：下载校验后查看',
         ),
         const SizedBox(height: 24),
         FilledButton.icon(

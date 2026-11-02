@@ -10,6 +10,7 @@ import '../../core/models/source.dart';
 import '../../core/parsing/parse_client.dart';
 import '../../core/parsing/source_catalog.dart';
 import '../../core/parsing/source_exchange.dart';
+import 'backup_zip.dart';
 
 /// A bounded, immutable, portable snapshot. Operational and secret settings
 /// are deliberately omitted even when the caller passes a full repository map.
@@ -21,6 +22,7 @@ class BackupArchive {
     required this.deviceName,
     required this.appVersion,
     required this.data,
+    required this.files,
   }) : digest = _hash(data);
 
   static const maxBytes = 16 * 1024 * 1024;
@@ -31,6 +33,8 @@ class BackupArchive {
   final String id, deviceId, deviceName, appVersion, digest;
   final DateTime createdAt;
   final Map<String, Map<String, Object?>> data;
+  final Map<String, List<int>> files;
+  List<int>? _encoded;
 
   factory BackupArchive.create({
     required String id,
@@ -39,6 +43,7 @@ class BackupArchive {
     required String deviceName,
     required String appVersion,
     required Map<String, Map<String, Object?>> data,
+    Map<String, List<int>> files = const {},
   }) {
     _identifier(id);
     _identifier(deviceId);
@@ -51,6 +56,10 @@ class BackupArchive {
       deviceName: deviceName,
       appVersion: appVersion,
       data: sanitizeData(data),
+      files: Map.unmodifiable({
+        for (final path in files.keys.toList()..sort())
+          path: List<int>.unmodifiable(files[path]!),
+      }),
     );
     if (utf8.encode(value.fileName).length > 240) {
       throw const FormatException('备份文件名不能超过 240 字节');
@@ -64,22 +73,47 @@ class BackupArchive {
   factory BackupArchive.decode(List<int> bytes) {
     if (bytes.length > maxBytes) throw const FormatException('备份不能超过 16 MiB');
     try {
-      final text = utf8.decode(bytes);
-      _checkNesting(text);
-      final root = _map(jsonDecode(text));
-      _bounded(root);
+      final entries = BackupZip.decode(bytes);
+      final manifest = entries['manifest.json'];
+      if (manifest == null) throw const FormatException('ZIP 缺少 manifest.json');
+      final root = _json(manifest);
       if (root['format'] != 'xdownloader.backup' ||
-          root['schemaVersion'] != 1) {
+          root['schemaVersion'] != 2) {
         throw const FormatException('不支持的备份版本');
       }
-      final payload = _map(root['data']);
-      final declared = _list(root['sections']);
-      if (declared.any((s) => s is! String) ||
-          declared.toSet().length != declared.length ||
-          declared.length != payload.length ||
-          !declared.toSet().containsAll(payload.keys)) {
+      final declared = _list(root['sections']).cast<String>();
+      final documents = _map(root['documents']);
+      final fileManifest = _map(root['files']);
+      if (declared.toSet().length != declared.length ||
+          !sections.containsAll(declared) ||
+          declared.length != documents.length ||
+          !documents.keys.every(declared.contains)) {
         throw const FormatException('备份内容分组不一致');
       }
+      final expected = {
+        'manifest.json',
+        for (final section in declared) '$section.json',
+        for (final path in fileManifest.keys) 'files/$path',
+      };
+      if (entries.length != expected.length ||
+          !expected.containsAll(entries.keys)) {
+        throw const FormatException('ZIP 文件缺失或包含未登记文件');
+      }
+      List<int> read(String path, Object? metadata) {
+        final content = entries[path];
+        final info = _map(metadata);
+        if (content == null ||
+            info['bytes'] != content.length ||
+            info['sha256'] != sha256.convert(content).toString()) {
+          throw const FormatException('备份文件完整性校验失败');
+        }
+        return content;
+      }
+
+      final payload = <String, Map<String, Object?>>{
+        for (final section in declared)
+          section: _json(read('$section.json', documents[section])),
+      };
       if (root['payloadSha256'] != _hash(payload)) {
         throw const FormatException('备份完整性校验失败');
       }
@@ -93,8 +127,10 @@ class BackupArchive {
         deviceId: root['deviceId'] as String,
         deviceName: root['deviceName'] as String,
         appVersion: root['appVersion'] as String,
-        data: {
-          for (final entry in payload.entries) entry.key: _map(entry.value),
+        data: payload,
+        files: {
+          for (final path in fileManifest.keys)
+            path: read('files/$path', fileManifest[path]),
         },
       );
     } on FormatException {
@@ -104,26 +140,73 @@ class BackupArchive {
     }
   }
 
-  String get fileName =>
-      'xdl_${createdAt.toIso8601String().replaceAll(RegExp(r'[:-]'), '')}_${deviceId}_$id.xdlbackup.json';
+  static Map<String, Object?> _json(List<int> bytes) {
+    final text = utf8.decode(bytes);
+    _checkNesting(text);
+    final result = _map(jsonDecode(text));
+    _bounded(result);
+    return result;
+  }
+
+  String get fileName {
+    final time = createdAt
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceFirst('T', '_');
+    final suffix = '_$time.zip';
+    final clean = deviceName
+        .trim()
+        .replaceAll(RegExp(r'[<>:"/\\|?*%\x00-\x1f\x7f]'), '_')
+        .replaceAll(RegExp(r'^[_ .]+|[_ .]+$'), '');
+    final name = StringBuffer();
+    var bytes = utf8.encode(suffix).length;
+    for (final rune in (clean.isEmpty ? '设备' : clean).runes) {
+      final character = String.fromCharCode(rune);
+      final length = utf8.encode(character).length;
+      if (bytes + length > 240) {
+        break;
+      }
+      name.write(character);
+      bytes += length;
+    }
+    return '$name$suffix';
+  }
 
   List<int> encode() {
-    final bytes = utf8.encode(
-      jsonEncode({
-        'format': 'xdownloader.backup',
-        'schemaVersion': 1,
-        'archiveId': id,
-        'createdAt': createdAt.toIso8601String(),
-        'deviceId': deviceId,
-        'deviceName': deviceName,
-        'appVersion': appVersion,
-        'sections': data.keys.toList()..sort(),
-        'payloadSha256': digest,
-        'data': data,
-      }),
-    );
-    if (bytes.length > maxBytes) throw const FormatException('备份不能超过 16 MiB');
-    return bytes;
+    return _encoded ??= _encode();
+  }
+
+  List<int> _encode() {
+    final documents = <String, List<int>>{
+      for (final section in data.keys.toList()..sort())
+        section: utf8.encode(jsonEncode(data[section])),
+    };
+    Map<String, Object?> info(List<int> bytes) => {
+      'bytes': bytes.length,
+      'sha256': sha256.convert(bytes).toString(),
+    };
+    final manifest = {
+      'format': 'xdownloader.backup',
+      'schemaVersion': 2,
+      'archiveId': id,
+      'createdAt': createdAt.toIso8601String(),
+      'deviceId': deviceId,
+      'deviceName': deviceName,
+      'appVersion': appVersion,
+      'sections': data.keys.toList()..sort(),
+      'payloadSha256': digest,
+      'documents': {
+        for (final entry in documents.entries) entry.key: info(entry.value),
+      },
+      'files': {
+        for (final entry in files.entries) entry.key: info(entry.value),
+      },
+    };
+    return BackupZip.encode({
+      'manifest.json': utf8.encode(jsonEncode(manifest)),
+      for (final entry in documents.entries) '${entry.key}.json': entry.value,
+      for (final entry in files.entries) 'files/${entry.key}': entry.value,
+    });
   }
 
   /// Shared validation for backup capture and pure restore planning.

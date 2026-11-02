@@ -59,7 +59,7 @@ class BackupRepository extends ChangeNotifier {
     BackupPlatform? platform,
     WebDavFactory? clientFactory,
     Directory? directory,
-    this.appVersion = '2.16.0-beta.2',
+    this.appVersion = '2.16.0-beta.3',
   }) : platform = platform ?? BackupPlatform(),
        directory = directory ?? Directory('${store.directory.path}/backups'),
        _clientFactory =
@@ -291,7 +291,7 @@ class BackupRepository extends ChangeNotifier {
     var invalid = 0;
     await for (final entity in directory.list(followLinks: false)) {
       _check(epoch);
-      if (entity is! File || !entity.path.endsWith('.xdlbackup.json')) continue;
+      if (entity is! File || !entity.path.endsWith('.zip')) continue;
       try {
         final length = await entity.length();
         if (length > BackupArchive.maxBytes) {

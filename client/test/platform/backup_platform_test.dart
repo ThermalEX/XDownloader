@@ -102,22 +102,16 @@ void main() {
     final platform = BackupPlatform(
       call: (method, arguments) async {
         expect(method, 'backupExport');
-        expect(arguments['name'], 'archive.xdlbackup.json');
+        expect(arguments['name'], 'archive.zip');
         expect(arguments['bytes'], isA<Uint8List>());
         expect(arguments['bytes'], [0, 128, 255]);
         return accepted;
       },
     );
 
-    expect(
-      await platform.exportFile('archive.xdlbackup.json', [0, 128, 255]),
-      isTrue,
-    );
+    expect(await platform.exportFile('archive.zip', [0, 128, 255]), isTrue);
     accepted = false;
-    expect(
-      await platform.exportFile('archive.xdlbackup.json', [0, 128, 255]),
-      isFalse,
-    );
+    expect(await platform.exportFile('archive.zip', [0, 128, 255]), isFalse);
   });
 
   test(

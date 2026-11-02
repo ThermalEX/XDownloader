@@ -78,6 +78,27 @@ Future<void> tap(WidgetTester tester, Key key) async {
 
 void main() {
   testWidgets(
+    'new server input is empty with a hint instead of prefilled protocol',
+    (tester) async {
+      final repository = _Repository();
+      await _pump(tester, repository);
+      await tap(tester, const Key('backup_config'));
+      final field = tester.widget<TextField>(
+        find.byKey(const Key('webdav_endpoint')),
+      );
+      expect(field.controller!.text, isEmpty);
+      expect(field.decoration!.hintText, 'https://dav.example.com/dav/');
+      expect(field.decoration!.labelText, '服务器地址');
+      final hintOpacity = find
+          .ancestor(
+            of: find.text('https://dav.example.com/dav/'),
+            matching: find.byType(AnimatedOpacity),
+          )
+          .first;
+      expect(tester.widget<AnimatedOpacity>(hintOpacity).opacity, 1.0);
+    },
+  );
+  testWidgets(
     'unconfigured backup saves locally and all portable groups are selected',
     (tester) async {
       final repository = _Repository();
@@ -94,16 +115,23 @@ void main() {
       final repository = _Repository()..config = _config;
       await _pump(tester, repository);
       await tap(tester, const Key('backup_cloud'));
-      expect(find.text('new.xdlbackup.json'), findsOneWidget);
-      expect(find.text('old.xdlbackup.json'), findsOneWidget);
+      expect(
+        find.text(repository.remoteEntries.first.name.replaceFirst('.zip', '')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(repository.remoteEntries.last.name.replaceFirst('.zip', '')),
+        findsOneWidget,
+      );
       expect(find.textContaining('云端修改时间'), findsWidgets);
       expect(find.textContaining('下载校验后查看'), findsWidgets);
+      expect(find.textContaining('设备和内容'), findsNothing);
       await tap(
         tester,
         Key('remote_${repository.remoteEntries.last.fingerprint}'),
       );
       await tap(tester, const Key('backup_download'));
-      expect(repository.downloaded?.name, 'old.xdlbackup.json');
+      expect(repository.downloaded?.name, repository.remoteEntries.last.name);
       expect(repository.restores, 0);
       expect(repository.before['favorites']!['items'], [favorite()]);
     },
@@ -117,7 +145,7 @@ void main() {
       await _pump(tester, repository);
       await tap(tester, const Key('backup_local'));
       await tap(tester, const Key('local_old'));
-      expect(find.textContaining('秘密设备-old'), findsOneWidget);
+      expect(find.textContaining('秘密设备-old'), findsWidgets);
       await tap(tester, const Key('backup_restore'));
       expect(find.text('恢复选项'), findsOneWidget);
       repository.setPrivacy(true);
@@ -255,14 +283,18 @@ class _Repository extends ChangeNotifier implements BackupRepository {
   @override
   final remoteEntries = [
     WebDavEntry(
-      uri: Uri.parse('https://dav.example/XDownloader/new.xdlbackup.json'),
-      name: 'new.xdlbackup.json',
+      uri: Uri.parse(
+        'https://dav.example/XDownloader/Pixel%2011%20Pro_2026-11-01_00-00-00.000Z.zip',
+      ),
+      name: 'Pixel 11 Pro_2026-11-01_00-00-00.000Z.zip',
       modifiedAt: DateTime.utc(2026, 11, 1),
       bytes: 100,
     ),
     WebDavEntry(
-      uri: Uri.parse('https://dav.example/XDownloader/old.xdlbackup.json'),
-      name: 'old.xdlbackup.json',
+      uri: Uri.parse(
+        'https://dav.example/XDownloader/Pixel%2011%20Pro_2026-10-01_00-00-00.000Z.zip',
+      ),
+      name: 'Pixel 11 Pro_2026-10-01_00-00-00.000Z.zip',
       modifiedAt: DateTime.utc(2026, 10, 1),
       bytes: 100,
     ),

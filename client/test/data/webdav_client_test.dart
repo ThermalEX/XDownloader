@@ -21,7 +21,7 @@ String listing(List<String> entries) =>
     '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
     '${entries.join()}</d:multistatus>';
 
-WebDavEntry entry([String name = 'old.xdlbackup.json']) => WebDavEntry(
+WebDavEntry entry([String name = 'old.zip']) => WebDavEntry(
   uri: Uri.parse('https://dav.example/base/XDownloader/$name'),
   name: name,
 );
@@ -67,55 +67,53 @@ void main() {
     );
   });
 
-  test('parses successful DAV propstat only and filters untrusted hrefs', () async {
-    final transport = WebDavClient(
-      config: config(),
-      password: 'secret',
-      client: MockClient((request) async {
-        expect(request.method, 'PROPFIND');
-        expect(request.headers['Depth'], '1');
-        expect(request.followRedirects, isFalse);
-        expect(
-          request.headers['Authorization'],
-          'Basic ${base64Encode(utf8.encode('alice:secret'))}',
-        );
-        return http.Response(
-          listing([
-            response(
-              '/base/XDownloader/',
-              props: '<d:resourcetype><d:collection/></d:resourcetype>',
-            ),
-            response(
-              'one.xdlbackup.json',
-              props: '<d:getetag>"first"</d:getetag><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Sun, 01 Nov 2026 12:00:00 GMT</d:getlastmodified>',
-            ),
-            '<d:response><d:href>/base/XDownloader/two.xdlbackup.json</d:href>'
-                '<d:propstat><d:prop><d:getetag>wrong</d:getetag></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>'
-                '<d:propstat><d:prop><d:getcontentlength>4</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>',
-            response(
-              'https://evil.example/base/XDownloader/stolen.xdlbackup.json',
-            ),
-            response('/base/outside.xdlbackup.json'),
-            response('%2e%2e/escaped.xdlbackup.json'),
-            response('nested/hidden.xdlbackup.json'),
-            response('notes.txt'),
-            response('bad.xdlbackup.json', status: '403 Forbidden'),
-          ]),
-          207,
-        );
-      }),
-    );
-    final entries = await transport.list();
-    expect(entries.map((item) => item.name), [
-      'one.xdlbackup.json',
-      'two.xdlbackup.json',
-    ]);
-    expect(entries.first.bytes, 12);
-    expect(entries.first.etag, '"first"');
-    expect(entries.first.modifiedAt, DateTime.utc(2026, 11, 1, 12));
-    expect(entries.last.etag, isNull);
-    expect(entries.first.fingerprint, isNot(entries.last.fingerprint));
-  });
+  test(
+    'parses successful DAV propstat only and filters untrusted hrefs',
+    () async {
+      final transport = WebDavClient(
+        config: config(),
+        password: 'secret',
+        client: MockClient((request) async {
+          expect(request.method, 'PROPFIND');
+          expect(request.headers['Depth'], '1');
+          expect(request.followRedirects, isFalse);
+          expect(
+            request.headers['Authorization'],
+            'Basic ${base64Encode(utf8.encode('alice:secret'))}',
+          );
+          return http.Response(
+            listing([
+              response(
+                '/base/XDownloader/',
+                props: '<d:resourcetype><d:collection/></d:resourcetype>',
+              ),
+              response(
+                'one.zip',
+                props: '<d:getetag>"first"</d:getetag><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Sun, 01 Nov 2026 12:00:00 GMT</d:getlastmodified>',
+              ),
+              '<d:response><d:href>/base/XDownloader/two.zip</d:href>'
+                  '<d:propstat><d:prop><d:getetag>wrong</d:getetag></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>'
+                  '<d:propstat><d:prop><d:getcontentlength>4</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>',
+              response('https://evil.example/base/XDownloader/stolen.zip'),
+              response('/base/outside.zip'),
+              response('%2e%2e/escaped.zip'),
+              response('nested/hidden.zip'),
+              response('notes.txt'),
+              response('bad.zip', status: '403 Forbidden'),
+            ]),
+            207,
+          );
+        }),
+      );
+      final entries = await transport.list();
+      expect(entries.map((item) => item.name), ['one.zip', 'two.zip']);
+      expect(entries.first.bytes, 12);
+      expect(entries.first.etag, '"first"');
+      expect(entries.first.modifiedAt, DateTime.utc(2026, 11, 1, 12));
+      expect(entries.last.etag, isNull);
+      expect(entries.first.fingerprint, isNot(entries.last.fingerprint));
+    },
+  );
 
   test(
     'rejects redirects without issuing a second authenticated request',
@@ -139,38 +137,41 @@ void main() {
     },
   );
 
-  test('rejects caller supplied entries outside the configured folder', () async {
-    var calls = 0;
-    final transport = WebDavClient(
-      config: config(),
-      password: '',
-      client: MockClient((_) async {
-        calls++;
-        return http.Response('', 200);
-      }),
-    );
-    await expectLater(
-      transport.read(
-        WebDavEntry(
-          uri: Uri.parse('https://evil.example/a.xdlbackup.json'),
-          name: 'a.xdlbackup.json',
-        ),
-      ),
-      throwsA(isA<Exception>()),
-    );
-    await expectLater(
-      transport.delete(
-        WebDavEntry(
-          uri: Uri.parse(
-            'https://dav.example/base/XDownloader/%252e%252e/a.xdlbackup.json',
+  test(
+    'rejects caller supplied entries outside the configured folder',
+    () async {
+      var calls = 0;
+      final transport = WebDavClient(
+        config: config(),
+        password: '',
+        client: MockClient((_) async {
+          calls++;
+          return http.Response('', 200);
+        }),
+      );
+      await expectLater(
+        transport.read(
+          WebDavEntry(
+            uri: Uri.parse('https://evil.example/a.zip'),
+            name: 'a.zip',
           ),
-          name: 'a.xdlbackup.json',
         ),
-      ),
-      throwsA(isA<Exception>()),
-    );
-    expect(calls, 0);
-  });
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        transport.delete(
+          WebDavEntry(
+            uri: Uri.parse(
+              'https://dav.example/base/XDownloader/%252e%252e/a.zip',
+            ),
+            name: 'a.zip',
+          ),
+        ),
+        throwsA(isA<Exception>()),
+      );
+      expect(calls, 0);
+    },
+  );
 
   test('read rejects partial, oversized and truncated bodies', () async {
     for (final result in [
@@ -212,7 +213,7 @@ void main() {
     'listing rejects excess entries, excess XML and external entities',
     () async {
       for (final body in [
-        listing(List.generate(1001, (i) => response('$i.xdlbackup.json'))),
+        listing(List.generate(1001, (i) => response('$i.zip'))),
         ' ' * (8 * 1024 * 1024 + 1),
         '<!DOCTYPE x [<!ENTITY leak SYSTEM "file:///secret">]><d:multistatus xmlns:d="DAV:"/>',
       ]) {
@@ -270,10 +271,10 @@ void main() {
         );
       }),
     );
-    final uploaded = await transport.upload('unique.xdlbackup.json', payload);
+    final uploaded = await transport.upload('unique.zip', payload);
     expect(requests.map((r) => r.method), ['MKCOL', 'MKCOL', 'PUT', 'GET']);
     expect(requests.first.url.pathSegments, ['base', '中文', '']);
-    expect(uploaded.name, 'unique.xdlbackup.json');
+    expect(uploaded.name, 'unique.zip');
     expect(uploaded.etag, '"uploaded"');
   });
 
@@ -290,7 +291,7 @@ void main() {
         }),
       );
       await expectLater(
-        transport.upload('old.xdlbackup.json', [1]),
+        transport.upload('old.zip', [1]),
         throwsA(isA<Exception>()),
       );
       expect(methods, ['MKCOL', 'PUT']);
@@ -315,13 +316,10 @@ void main() {
           }),
         );
         if (matches) {
-          expect(
-            (await transport.upload('same.xdlbackup.json', [1, 2, 3])).bytes,
-            3,
-          );
+          expect((await transport.upload('same.zip', [1, 2, 3])).bytes, 3);
         } else {
           await expectLater(
-            transport.upload('same.xdlbackup.json', [1, 2, 3]),
+            transport.upload('same.zip', [1, 2, 3]),
             throwsA(isA<Exception>()),
           );
         }
@@ -353,7 +351,7 @@ void main() {
     expect(paths.length, 3);
     expect(paths.toSet().length, 1);
     expect(paths.first, contains('.xdl-connection-'));
-    expect(paths.first, isNot(contains('.xdlbackup.json')));
+    expect(paths.first, isNot(contains('.zip')));
   });
 
   test(
@@ -439,7 +437,7 @@ void main() {
       }),
     );
     await expectLater(
-      transport.upload('new.xdlbackup.json', [1]),
+      transport.upload('new.zip', [1]),
       throwsA(isA<Exception>()),
     );
     expect(methods, ['MKCOL', 'PROPFIND']);
@@ -527,11 +525,11 @@ void main() {
       }),
     );
     await expectLater(
-      transport.upload('retry.xdlbackup.json', payload),
+      transport.upload('retry.zip', payload),
       throwsA(isA<WebDavException>()),
     );
     final result = await transport.upload(
-      'retry.xdlbackup.json',
+      'retry.zip',
       payload,
       reconcileExisting: true,
     );
@@ -559,11 +557,7 @@ void main() {
       }),
     );
     await expectLater(
-      transport.upload('existing.xdlbackup.json', [
-        1,
-        2,
-        3,
-      ], reconcileExisting: true),
+      transport.upload('existing.zip', [1, 2, 3], reconcileExisting: true),
       throwsA(isA<WebDavException>()),
     );
     expect(remote, [9, 8, 7]);

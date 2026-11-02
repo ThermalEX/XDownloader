@@ -267,8 +267,8 @@ void main() {
       );
       final downloading = backups.download(
         WebDavEntry(
-          uri: Uri.parse('https://dav.test/dav/XDownloader/a.xdlbackup.json'),
-          name: 'a.xdlbackup.json',
+          uri: Uri.parse('https://dav.test/dav/XDownloader/a.zip'),
+          name: 'a.zip',
         ),
       );
       final failure = expectLater(downloading, throwsA(isA<Exception>()));
@@ -280,7 +280,7 @@ void main() {
       expect(
         await Directory('${dir.path}/backups')
             .list()
-            .where((f) => f.path.endsWith('.xdlbackup.json'))
+            .where((f) => f.path.endsWith('.zip'))
             .length,
         0,
       );
@@ -318,10 +318,8 @@ void main() {
       await expectLater(
         backups.download(
           WebDavEntry(
-            uri: Uri.parse(
-              'https://dav.test/dav/XDownloader/conflict.xdlbackup.json',
-            ),
-            name: 'conflict.xdlbackup.json',
+            uri: Uri.parse('https://dav.test/dav/XDownloader/conflict.zip'),
+            name: 'conflict.zip',
           ),
         ),
         throwsA(isA<Exception>()),
@@ -329,7 +327,7 @@ void main() {
       expect(
         await Directory('${dir.path}/backups')
             .list()
-            .where((f) => f.path.endsWith('.xdlbackup.json'))
+            .where((f) => f.path.endsWith('.zip'))
             .length,
         1,
       );

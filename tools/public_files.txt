@@ -255,3 +255,5 @@ client/lib/features/settings/backup_sync_screen.dart
 client/test/data/backup_repository_test.dart
 client/test/features/backup_startup_test.dart
 client/test/features/backup_sync_test.dart
+client/lib/data/backup/backup_zip.dart
+client/test/data/backup_zip_test.dart
