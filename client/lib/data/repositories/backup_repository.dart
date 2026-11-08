@@ -59,7 +59,7 @@ class BackupRepository extends ChangeNotifier {
     BackupPlatform? platform,
     WebDavFactory? clientFactory,
     Directory? directory,
-    this.appVersion = '2.16.0',
+    this.appVersion = '2.16.1',
   }) : platform = platform ?? BackupPlatform(),
        directory = directory ?? Directory('${store.directory.path}/backups'),
        _clientFactory =

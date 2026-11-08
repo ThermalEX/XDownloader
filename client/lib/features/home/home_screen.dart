@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 import '../../app/app_shell.dart';
 import '../../app/handed_layout.dart';
@@ -27,13 +28,22 @@ class HomeScreen extends StatelessWidget {
         controller.result == null &&
             !controller.busy &&
             controller.error == null
-        ? controller.dependencies.settings.value.privacyMode
-              ? _PrivateEmptyState(settings: controller.dependencies.settings)
-              : _HomeEmptyState(
-                  asset: appAvatarAsset(
-                    controller.dependencies.settings.value.playfulAvatar,
+        ? _HomePrivacyGesture(
+            key: ValueKey(controller.dependencies.settings.value.privacyMode),
+            settings: controller.dependencies.settings,
+            child: controller.dependencies.settings.value.privacyMode
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('隐私模式已开启'),
+                    ),
+                  )
+                : _HomeEmptyState(
+                    asset: appAvatarAsset(
+                      controller.dependencies.settings.value.playfulAvatar,
+                    ),
                   ),
-                )
+          )
         : ListView(
             padding: EdgeInsets.fromLTRB(
               16,
@@ -70,17 +80,29 @@ class HomeScreen extends StatelessWidget {
   );
 }
 
-class _PrivateEmptyState extends StatefulWidget {
-  const _PrivateEmptyState({required this.settings});
+class _HomePrivacyGesture extends StatefulWidget {
+  const _HomePrivacyGesture({
+    super.key,
+    required this.settings,
+    required this.child,
+  });
   final SettingsRepository settings;
+  final Widget child;
   @override
-  State<_PrivateEmptyState> createState() => _PrivateEmptyStateState();
+  State<_HomePrivacyGesture> createState() => _HomePrivacyGestureState();
 }
 
-class _PrivateEmptyStateState extends State<_PrivateEmptyState> {
+class _HomePrivacyGestureState extends State<_HomePrivacyGesture> {
   Timer? _reset;
+  PointerDownEvent? _pointer;
   int _taps = 0;
   bool _opening = false;
+
+  void _cancelTap() {
+    _pointer = null;
+    _taps = 0;
+    _reset?.cancel();
+  }
 
   @override
   void dispose() {
@@ -89,7 +111,7 @@ class _PrivateEmptyStateState extends State<_PrivateEmptyState> {
   }
 
   Future<void> _tap() async {
-    if (_opening || !widget.settings.value.privacyMode) return;
+    if (_opening) return;
     _reset?.cancel();
     if (++_taps < 3) {
       _reset = Timer(const Duration(milliseconds: 500), () => _taps = 0);
@@ -98,7 +120,9 @@ class _PrivateEmptyStateState extends State<_PrivateEmptyState> {
     _taps = 0;
     _opening = true;
     try {
-      if (widget.settings.value.privacyPasswordHash.isEmpty) {
+      if (!widget.settings.value.privacyMode) {
+        await widget.settings.setPrivacyMode(true);
+      } else if (widget.settings.value.privacyPasswordHash.isEmpty) {
         await widget.settings.setPrivacyMode(false);
       } else {
         await showPrivacyPasswordDialog(
@@ -113,12 +137,30 @@ class _PrivateEmptyStateState extends State<_PrivateEmptyState> {
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => Listener(
     behavior: HitTestBehavior.opaque,
-    onTap: () => runAction(context, _tap),
-    child: const Center(
-      child: Padding(padding: EdgeInsets.all(24), child: Text('隐私模式已开启')),
-    ),
+    // Observe taps without entering the gesture arena, so the page swipe can
+    // still respond to its first drag movement.
+    onPointerDown: (event) => _pointer =
+        _pointer == null && event.buttons == kPrimaryButton ? event : null,
+    onPointerMove: (event) {
+      if (_pointer case final start?) {
+        if ((event.position - start.position).distance > kTouchSlop) {
+          _cancelTap();
+        }
+      }
+    },
+    onPointerCancel: (_) => _cancelTap(),
+    onPointerUp: (event) {
+      final start = _pointer;
+      _pointer = null;
+      if (start != null &&
+          start.pointer == event.pointer &&
+          (event.position - start.position).distance <= kTouchSlop) {
+        runAction(context, _tap);
+      }
+    },
+    child: widget.child,
   );
 }
 

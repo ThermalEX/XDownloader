@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xdownloader/app/app.dart';
+import 'package:xdownloader/features/home/home_screen.dart';
 import 'package:xdownloader/data/repositories/settings_repository.dart';
 import 'package:xdownloader/features/settings/application_settings_screen.dart';
 import 'package:xdownloader/features/settings/privacy_unlock_screen.dart';
@@ -28,6 +29,100 @@ Future<SettingsRepository> showPrivacySettings(
 }
 
 void main() {
+  testWidgets(
+    'three consecutive blank home taps enable privacy and reset after switching',
+    (tester) => withAppFixture(tester, (fixture) async {
+      await tester.pumpWidget(
+        XDownloaderApp(dependencies: fixture.dependencies),
+      );
+      await tester.pumpAndSettle();
+      final target =
+          tester.getRect(find.byType(HomeScreen)).topLeft +
+          const Offset(32, 32);
+      for (var i = 0; i < 3; i++) {
+        await tester.dragFrom(target, const Offset(0, 40));
+      }
+      await tester.pumpAndSettle();
+      expect(fixture.settings.value.privacyMode, isFalse);
+      await tester.tapAt(target);
+      await tester.pump(const Duration(milliseconds: 600));
+      for (var i = 0; i < 2; i++) {
+        await tester.tapAt(target);
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      expect(fixture.settings.value.privacyMode, isFalse);
+      await tester.tapAt(target);
+      await tester.pumpAndSettle();
+      expect(fixture.settings.value.privacyMode, isTrue);
+      expect(find.text('隐私模式已开启'), findsOneWidget);
+      expect(find.byKey(const Key('home_quick_privacy')), findsNothing);
+      await tester.tapAt(target);
+      await tester.pumpAndSettle();
+      expect(fixture.settings.value.privacyMode, isTrue);
+      await tester.pump(const Duration(milliseconds: 600));
+      for (var i = 0; i < 3; i++) {
+        await tester.tapAt(target);
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await tester.pumpAndSettle();
+      expect(fixture.settings.value.privacyMode, isFalse);
+      expect(find.byKey(const Key('home_empty_art')), findsOneWidget);
+    }),
+  );
+
+  testWidgets(
+    'blank home taps enable with a PIN, and unlock still requires the PIN',
+    (tester) => withAppFixture(tester, (fixture) async {
+      final hash = await TestPrivacyPasswords().hash('1234');
+      await fixture.store.write('settings', {'privacyPasswordHash': hash});
+      await fixture.settings.initialize();
+      await tester.pumpWidget(
+        XDownloaderApp(dependencies: fixture.dependencies),
+      );
+      await tester.pumpAndSettle();
+      final target =
+          tester.getRect(find.byType(HomeScreen)).topLeft +
+          const Offset(32, 32);
+      for (var i = 0; i < 3; i++) {
+        await tester.tapAt(target);
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await tester.pumpAndSettle();
+      expect(fixture.settings.value.privacyMode, isTrue);
+      expect(find.byKey(const Key('privacy_unlock_screen')), findsNothing);
+      for (var i = 0; i < 3; i++) {
+        await tester.tapAt(target);
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('privacy_unlock_screen')), findsOneWidget);
+      expect(fixture.settings.value.privacyMode, isTrue);
+    }),
+  );
+
+  testWidgets(
+    'external privacy changes discard the previous partial tap sequence',
+    (tester) => withAppFixture(tester, (fixture) async {
+      await tester.pumpWidget(
+        XDownloaderApp(dependencies: fixture.dependencies),
+      );
+      await tester.pumpAndSettle();
+      final target =
+          tester.getRect(find.byType(HomeScreen)).topLeft +
+          const Offset(32, 32);
+      for (var i = 0; i < 2; i++) {
+        await tester.tapAt(target);
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await fixture.settings.setPrivacyMode(true);
+      await tester.pumpAndSettle();
+      await tester.tapAt(target);
+      await tester.pumpAndSettle();
+      expect(fixture.settings.value.privacyMode, isTrue);
+      await tester.pump(const Duration(milliseconds: 600));
+    }),
+  );
+
   testWidgets('PIN controls scale with phone width and stay centered', (
     tester,
   ) async {

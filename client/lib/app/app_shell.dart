@@ -30,7 +30,6 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
   final _pages = _NestedScrollPageController();
   ReleaseCheck? _pendingStartup;
   bool _promptScheduled = false;
-  bool _backgrounded = false;
   bool _homeInitialized = false;
   bool _resumeHomePending = false;
   bool _backupPromptPending = false, _backupPromptScheduled = false;
@@ -250,14 +249,7 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
       state == AppLifecycleState.resumed,
       owner: this,
     );
-    if (!_backgrounded &&
-        (state == AppLifecycleState.hidden ||
-            state == AppLifecycleState.paused)) {
-      _backgrounded = true;
-      home.clear();
-    }
     if (state == AppLifecycleState.resumed) {
-      _backgrounded = false;
       _scheduleUpdatePrompt();
       _scheduleBackupPrompt();
       unawaited(runAction(context, widget.dependencies.downloads.reconcile));

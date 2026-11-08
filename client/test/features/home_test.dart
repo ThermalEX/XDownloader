@@ -36,7 +36,7 @@ void main() {
     }),
   );
   testWidgets(
-    'backgrounding clears the query while tab changes and inactive preserve it',
+    'background and tab changes preserve results until a fresh app session',
     (tester) => withAppFixture(tester, (f) async {
       void background() {
         for (final state in [
@@ -80,9 +80,11 @@ void main() {
       f.shareEvents.add('https://x.com/b/status/222222');
       await tester.pumpAndSettle();
       background();
+      f.clipboard = 'https://x.com/new/status/444444';
       resume();
       await tester.pumpAndSettle();
-      expect(find.text('中文视频'), findsNothing);
+      expect(find.text('中文视频'), findsOneWidget);
+      expect(find.text('https://x.com/author/status/222222'), findsOneWidget);
       expect(f.parser.calls, hasLength(2));
       // An explicit new share arriving before resume must survive that resume.
       background();
@@ -90,6 +92,15 @@ void main() {
       resume();
       await tester.pumpAndSettle();
       expect(find.text('https://x.com/author/status/333333'), findsOneWidget);
+      // Recreating the app shell (closing and reopening) starts with no query;
+      // even the current clipboard is only seeded for deduplication.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(XDownloaderApp(dependencies: f.dependencies));
+      await tester.pumpAndSettle();
+      expect(find.text('中文视频'), findsNothing);
+      expect(find.byKey(const Key('home_empty_art')), findsOneWidget);
+      expect(f.parser.calls, hasLength(3));
     }),
   );
   late AppFixture fixture;
