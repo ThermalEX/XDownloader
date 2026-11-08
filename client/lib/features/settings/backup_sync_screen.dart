@@ -705,11 +705,7 @@ Future<void> _restore(
   BuildContext context,
   BackupRepository repository,
   BackupArchive archive,
-) => showDialog<void>(
-  context: context,
-  barrierDismissible: false,
-  builder: (_) => _RestoreDialog(repository: repository, archive: archive),
-);
+) => _push(context, _RestoreScreen(repository: repository, archive: archive));
 
 class _LocalDetailScreen extends StatelessWidget {
   const _LocalDetailScreen({required this.repository, required this.archive});
@@ -885,15 +881,15 @@ class _RemoteDetailScreenState extends State<_RemoteDetailScreen> {
   }
 }
 
-class _RestoreDialog extends StatefulWidget {
-  const _RestoreDialog({required this.repository, required this.archive});
+class _RestoreScreen extends StatefulWidget {
+  const _RestoreScreen({required this.repository, required this.archive});
   final BackupRepository repository;
   final BackupArchive archive;
   @override
-  State<_RestoreDialog> createState() => _RestoreDialogState();
+  State<_RestoreScreen> createState() => _RestoreScreenState();
 }
 
-class _RestoreDialogState extends State<_RestoreDialog> {
+class _RestoreScreenState extends State<_RestoreScreen> {
   late final Set<String> _sections = {...widget.archive.data.keys};
   bool _replace = false, _preferArchive = false;
   RestorePreview? _preview;
@@ -901,167 +897,279 @@ class _RestoreDialogState extends State<_RestoreDialog> {
   @override
   Widget build(BuildContext context) {
     final repository = widget.repository;
+    final theme = Theme.of(context);
+    final preview = _preview;
     return _Guard(
       repository: repository,
-      dialog: true,
-      builder: (context) => AlertDialog(
-        title: Text(_preview == null ? '恢复选项' : '确认恢复'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
+      builder: (context) => PopScope(
+        canPop: !repository.busy && preview == null,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && !repository.busy) setState(() => _preview = null);
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(preview == null ? '恢复选项' : '确认恢复'),
+            leading: IconButton(
+              tooltip: preview == null ? '取消' : '返回选项',
+              icon: Icon(preview == null ? Icons.close : Icons.arrow_back),
+              onPressed: repository.busy
+                  ? null
+                  : () {
+                      if (preview == null) {
+                        Navigator.pop(context);
+                      } else {
+                        setState(() => _preview = null);
+                      }
+                    },
+            ),
+          ),
+          body: SafeArea(
+            top: false,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _preview != null
-                  ? [
-                      ..._summary(_preview!),
-                      const SizedBox(height: 12),
-                      const Text('恢复前会先创建完整的本地安全存档；保存失败则不修改当前数据。'),
-                      const Text('PIN、隐私状态、WebDAV 凭据和下载文件均保留。'),
-                      _status(repository),
-                    ]
-                  : [
-                      const Text('恢复方式'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ChoiceChip(
-                            key: const Key('restore_mode_merge'),
-                            label: const Text('合并'),
-                            selected: !_replace,
-                            onSelected: repository.busy
-                                ? null
-                                : (_) => setState(() => _replace = false),
-                          ),
-                          ChoiceChip(
-                            key: const Key('restore_mode_replace'),
-                            label: const Text('覆盖所选内容'),
-                            selected: _replace,
-                            onSelected: repository.busy
-                                ? null
-                                : (_) => setState(() => _replace = true),
-                          ),
-                        ],
-                      ),
+              children: [
+                Expanded(
+                  child: ListView(
+                    key: ValueKey(
+                      preview == null ? 'restore_options' : 'restore_results',
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    children: [
                       Text(
-                        _replace
-                            ? '仅替换勾选的内容；空收藏会清空当前收藏。'
-                            : '合并不会传播删除，旧收藏可能重新加入。',
+                        preview == null ? '第 1 步 · 选择恢复内容' : '第 2 步 · 核对恢复结果',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      for (final section in widget.archive.data.keys)
-                        CheckboxListTile(
-                          key: Key('restore_section_$section'),
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(_sectionNames[section]!),
-                          value: _sections.contains(section),
-                          onChanged: repository.busy
-                              ? null
-                              : (value) => setState(() {
-                                  if (value == true) {
-                                    _sections.add(section);
-                                  } else {
-                                    _sections.remove(section);
-                                  }
-                                }),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${widget.archive.deviceName} · ${_time(widget.archive.createdAt)}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                      if (!_replace) ...[
-                        const Text('冲突处理'),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            ChoiceChip(
-                              label: const Text('保留本机'),
-                              selected: !_preferArchive,
-                              onSelected: repository.busy
-                                  ? null
-                                  : (_) =>
-                                        setState(() => _preferArchive = false),
-                            ),
-                            ChoiceChip(
-                              key: const Key('restore_prefer_archive'),
-                              label: const Text('采用存档'),
-                              selected: _preferArchive,
-                              onSelected: repository.busy
-                                  ? null
-                                  : (_) =>
-                                        setState(() => _preferArchive = true),
-                            ),
-                          ],
+                      ),
+                      const SizedBox(height: 24),
+                      if (preview == null) ...[
+                        _RestoreSection(
+                          title: '恢复方式',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SegmentedButton<bool>(
+                                showSelectedIcon: false,
+                                segments: const [
+                                  ButtonSegment(
+                                    value: false,
+                                    label: Text(
+                                      '合并',
+                                      key: Key('restore_mode_merge'),
+                                    ),
+                                  ),
+                                  ButtonSegment(
+                                    value: true,
+                                    label: Text(
+                                      '覆盖',
+                                      key: Key('restore_mode_replace'),
+                                    ),
+                                  ),
+                                ],
+                                selected: {_replace},
+                                onSelectionChanged: repository.busy
+                                    ? null
+                                    : (value) => setState(
+                                        () => _replace = value.single,
+                                      ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _replace
+                                    ? '用存档替换勾选内容；空收藏会清空当前收藏。'
+                                    : '加入缺少的内容。不会同步删除，旧收藏可能重新加入。',
+                              ),
+                            ],
+                          ),
                         ),
+                        _RestoreSection(
+                          title: '恢复内容',
+                          child: Column(
+                            children: [
+                              for (final section in widget.archive.data.keys)
+                                CheckboxListTile(
+                                  key: Key('restore_section_$section'),
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(_sectionNames[section]!),
+                                  value: _sections.contains(section),
+                                  onChanged: repository.busy
+                                      ? null
+                                      : (value) => setState(() {
+                                          if (value == true) {
+                                            _sections.add(section);
+                                          } else {
+                                            _sections.remove(section);
+                                          }
+                                        }),
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (!_replace)
+                          _RestoreSection(
+                            title: '冲突时采用',
+                            child: RadioGroup<bool>(
+                              groupValue: _preferArchive,
+                              onChanged: (value) {
+                                if (value != null && !repository.busy) {
+                                  setState(() => _preferArchive = value);
+                                }
+                              },
+                              child: Column(
+                                children: [
+                                  RadioListTile<bool>(
+                                    contentPadding: EdgeInsets.zero,
+                                    value: false,
+                                    title: const Text('本机内容'),
+                                    subtitle: const Text('保留本机条目和应用设置'),
+                                    enabled: !repository.busy,
+                                  ),
+                                  RadioListTile<bool>(
+                                    key: const Key('restore_prefer_archive'),
+                                    contentPadding: EdgeInsets.zero,
+                                    value: true,
+                                    title: const Text('存档内容'),
+                                    subtitle: const Text('冲突条目和应用设置采用存档值'),
+                                    enabled: !repository.busy,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ] else ...[
                         Text(
-                          _preferArchive
-                              ? '同一条目的冲突采用存档；应用设置也采用存档值。'
-                              : '同一条目的冲突保留本机；应用设置不变。',
+                          preview.replace ? '覆盖所选内容' : '合并到当前数据',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 16),
+                        ..._summary(context, preview),
+                        if (!preview.replace)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 16),
+                            child: Text('合并不会同步删除，旧收藏可能重新加入。'),
+                          ),
+                        _RestoreSection(
+                          title: '自动保护',
+                          child: const Text(
+                            '恢复前先创建完整的本地安全存档，保存失败不会修改数据。\n\nPIN、隐私状态、WebDAV 凭据和下载文件均保留。',
+                          ),
                         ),
                       ],
-                      _status(repository),
                     ],
+                  ),
+                ),
+                if (repository.busy) const LinearProgressIndicator(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: repository.busy
+                              ? null
+                              : () {
+                                  if (preview == null) {
+                                    Navigator.pop(context);
+                                  } else {
+                                    setState(() => _preview = null);
+                                  }
+                                },
+                          child: Text(preview == null ? '取消' : '返回选项'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          key: Key(
+                            preview == null
+                                ? 'restore_preview'
+                                : 'restore_confirm',
+                          ),
+                          onPressed:
+                              repository.busy ||
+                                  (preview == null && _sections.isEmpty)
+                              ? null
+                              : () async {
+                                  if (preview == null) {
+                                    final result = await _act(
+                                      context,
+                                      repository,
+                                      () => repository.preview(
+                                        widget.archive,
+                                        replace: _replace,
+                                        preferArchive: _preferArchive,
+                                        sections: {..._sections},
+                                      ),
+                                    );
+                                    if (result != null &&
+                                        mounted &&
+                                        !repository.isPrivate) {
+                                      setState(() => _preview = result);
+                                    }
+                                  } else {
+                                    final done = await _act(
+                                      context,
+                                      repository,
+                                      () async {
+                                        await repository.restore(preview);
+                                        return true;
+                                      },
+                                    );
+                                    if (done == true &&
+                                        context.mounted &&
+                                        !repository.isPrivate) {
+                                      Navigator.pop(context);
+                                    }
+                                  }
+                                },
+                          child: Text(
+                            preview == null ? '预览变更' : '确认恢复',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: repository.busy ? null : () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          if (_preview != null)
-            TextButton(
-              onPressed: repository.busy
-                  ? null
-                  : () => setState(() => _preview = null),
-              child: const Text('返回选项'),
-            ),
-          if (_preview == null)
-            FilledButton(
-              key: const Key('restore_preview'),
-              onPressed: repository.busy || _sections.isEmpty
-                  ? null
-                  : () async {
-                      final preview = await _act(
-                        context,
-                        repository,
-                        () => repository.preview(
-                          widget.archive,
-                          replace: _replace,
-                          preferArchive: _preferArchive,
-                          sections: {..._sections},
-                        ),
-                      );
-                      if (preview != null && mounted && !repository.isPrivate) {
-                        setState(() => _preview = preview);
-                      }
-                    },
-              child: const Text('生成恢复预览'),
-            ),
-          if (_preview != null)
-            FilledButton(
-              key: const Key('restore_confirm'),
-              onPressed: repository.busy
-                  ? null
-                  : () async {
-                      final done = await _act(context, repository, () async {
-                        await repository.restore(_preview!);
-                        return true;
-                      });
-                      if (done == true &&
-                          context.mounted &&
-                          !repository.isPrivate) {
-                        Navigator.pop(context);
-                      }
-                    },
-              child: const Text('确认恢复'),
-            ),
-        ],
       ),
     );
   }
 }
 
-List<Widget> _summary(RestorePreview preview) {
-  final result = <Widget>[Text(preview.replace ? '覆盖所选内容' : '合并到当前数据')];
+class _RestoreSection extends StatelessWidget {
+  const _RestoreSection({required this.title, required this.child});
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SettingsPanel(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    ),
+  );
+}
+
+List<Widget> _summary(BuildContext context, RestorePreview preview) {
+  final result = <Widget>[];
   for (final section in preview.groups.keys) {
     final before = preview.before[section] ?? const <String, Object?>{};
     final after = preview.groups[section]!;
@@ -1081,28 +1189,47 @@ List<Widget> _summary(RestorePreview preview) {
           .where((id) => old.containsKey(id) && !_same(old[id], incoming[id]))
           .length;
       result.add(
-        Text(
-          '${_sectionNames[section]}：新增 $added，冲突 $conflicts，恢复后 ${next.length} 条',
+        _RestoreSection(
+          title: _sectionNames[section]!,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '恢复后 ${next.length} 条',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 24,
+                runSpacing: 8,
+                children: [Text('新增 $added'), Text('冲突 $conflicts')],
+              ),
+              if (preview.replace && deleted > 0) ...[
+                const SizedBox(height: 12),
+                Text(
+                  section == 'favorites'
+                      ? '将删除 $deleted 条收藏'
+                      : '将删除 $deleted 个自定义源',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
         ),
       );
-      if (preview.replace && deleted > 0) {
-        result.add(
-          Text(
-            section == 'favorites' ? '将删除 $deleted 条收藏' : '将删除 $deleted 个自定义源',
-          ),
-        );
-      }
     } else {
       final adopt =
           preview.replace ||
           preview.preferArchive ||
           !preview.before.containsKey(section);
       result.add(
-        Text('${_sectionNames[section]}：${adopt ? '采用存档设置' : '保持本机设置不变'}'),
+        _RestoreSection(
+          title: _sectionNames[section]!,
+          child: Text(adopt ? '采用存档设置' : '保持本机设置不变'),
+        ),
       );
     }
   }
-  if (!preview.replace) result.add(const Text('合并不会传播删除，旧收藏可能重新加入。'));
   return result;
 }
 

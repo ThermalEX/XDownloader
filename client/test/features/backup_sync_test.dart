@@ -5,20 +5,23 @@ import 'package:xdownloader/data/backup/webdav_client.dart';
 import 'package:xdownloader/data/repositories/backup_repository.dart';
 import 'package:xdownloader/features/settings/backup_sync_screen.dart';
 
-BackupArchive archive(String id, {bool empty = false}) => BackupArchive.create(
-  id: id,
-  createdAt: DateTime.utc(2026, 11, 1),
-  deviceId: 'device',
-  deviceName: '秘密设备-$id',
-  appVersion: '2.16.0',
-  data: {
-    'favorites': {
-      'items': empty ? [] : [favorite()],
-      'categories': [],
-    },
-    'settings': {'themeMode': 'dark'},
-  },
-);
+BackupArchive archive(String id, {bool empty = false, bool all = false}) =>
+    BackupArchive.create(
+      id: id,
+      createdAt: DateTime.utc(2026, 11, 1),
+      deviceId: 'device',
+      deviceName: '秘密设备-$id',
+      appVersion: '2.16.0',
+      data: {
+        'favorites': {
+          'items': empty ? [] : [favorite()],
+          'categories': [],
+        },
+        'settings': {'themeMode': 'dark'},
+        if (all) 'sources': {'custom': []},
+        if (all) 'updates': {'channel': 'beta'},
+      },
+    );
 
 Map<String, Object?> favorite() => {
   'postId': '12345',
@@ -152,7 +155,7 @@ void main() {
       await tester.pump();
       expect(find.textContaining('秘密设备'), findsNothing);
       expect(find.text('恢复选项'), findsNothing);
-      expect(find.text('生成恢复预览'), findsNothing);
+      expect(find.text('预览变更'), findsNothing);
       expect(find.text('隐私模式下不可查看或备份'), findsWidgets);
       expect(repository.restores, 0);
     },
@@ -193,6 +196,85 @@ void main() {
       expect(repository.restores, 1);
     },
   );
+
+  testWidgets(
+    'restore uses two full pages, keeps choices on back and omits sync status',
+    (tester) async {
+      final repository = _Repository()
+        ..recentCheckAt = DateTime.utc(2026, 11, 8)
+        ..status = '已下载到本地，当前数据未改变'
+        ..localArchives = [_Local(archive('all', all: true))];
+      await _pump(tester, repository);
+      await tap(tester, const Key('backup_local'));
+      await tap(tester, const Key('local_all'));
+      await tap(tester, const Key('backup_restore'));
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.textContaining('最近云端检测'), findsNothing);
+      expect(find.text('已下载到本地，当前数据未改变'), findsNothing);
+      await tap(tester, const Key('restore_section_settings'));
+      await tap(tester, const Key('restore_prefer_archive'));
+      final footer = tester.getRect(find.byKey(const Key('restore_preview')));
+      expect(footer.bottom, lessThanOrEqualTo(tester.view.physicalSize.height));
+      await tap(tester, const Key('restore_preview'));
+      expect(repository.previewSections, {'favorites', 'sources', 'updates'});
+      expect(repository.previewPreferArchive, isTrue);
+      expect(repository.restores, 0);
+      expect(find.text('确认恢复'), findsNWidgets(2));
+      expect(find.textContaining('最近云端检测'), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('恢复选项'), findsOneWidget);
+      await tap(tester, const Key('restore_section_settings'));
+      await tap(tester, const Key('restore_preview'));
+      expect(repository.previewSections, BackupArchive.sections);
+      expect(repository.previewPreferArchive, isTrue);
+      repository.setPrivacy(true);
+      await tester.pumpAndSettle();
+      expect(find.text('确认恢复'), findsNothing);
+      expect(find.textContaining('秘密设备'), findsNothing);
+      expect(find.text('隐私模式下不可查看或备份'), findsWidgets);
+      expect(repository.restores, 0);
+    },
+  );
+
+  for (final brightness in Brightness.values) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets('restore pages fit 320dp $brightness at ${scale}x', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(320, 720);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = _Repository()
+          ..localArchives = [_Local(archive('fit', all: true))];
+        await _pump(tester, repository, brightness: brightness, scale: scale);
+        await tap(tester, const Key('backup_local'));
+        await tap(tester, const Key('local_fit'));
+        await tap(tester, const Key('backup_restore'));
+        expect(tester.takeException(), isNull);
+        // Footer remains visible even when options must scroll.
+        expect(
+          find.byKey(const Key('restore_preview')).hitTestable(),
+          findsOneWidget,
+        );
+        await tap(tester, const Key('restore_prefer_archive'));
+        expect(
+          find.byKey(const Key('restore_preview')).hitTestable(),
+          findsOneWidget,
+        );
+        await tap(tester, const Key('restore_preview'));
+        expect(tester.takeException(), isNull);
+        expect(
+          find.byKey(const Key('restore_confirm')).hitTestable(),
+          findsOneWidget,
+        );
+        await tap(tester, const Key('restore_confirm'));
+        expect(repository.restores, 1);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 
   testWidgets(
     'HTTP configuration requires an explicit transport-risk checkbox',
@@ -267,7 +349,7 @@ class _Repository extends ChangeNotifier implements BackupRepository {
   @override
   DateTime? get recentBackupAt => null;
   @override
-  DateTime? get recentCheckAt => null;
+  DateTime? recentCheckAt;
   @override
   WebDavConfig? config;
   @override
@@ -308,7 +390,7 @@ class _Repository extends ChangeNotifier implements BackupRepository {
   int restores = 0, configurations = 0;
   BackupLocation? createdLocation;
   Set<String>? createdSections, previewSections;
-  bool? previewReplace;
+  bool? previewReplace, previewPreferArchive;
   WebDavEntry? downloaded;
 
   void setPrivacy(bool value) {
@@ -367,6 +449,7 @@ class _Repository extends ChangeNotifier implements BackupRepository {
   }) async {
     previewSections = sections;
     previewReplace = replace;
+    previewPreferArchive = preferArchive;
     return _Preview(
       archive,
       before,

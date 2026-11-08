@@ -10,7 +10,6 @@ import '../../app/library_search.dart';
 import '../../core/models/download.dart';
 import 'download_tile.dart';
 import 'video_preview_screen.dart';
-import 'download_history_screen.dart';
 
 enum _DownloadAction { open, favorite, remove, delete }
 
@@ -445,28 +444,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!_private) LibrarySearchField(search: _search, name: 'downloads'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(
-              alignment: HandedLayout.actionAlignment(context),
-              child: TextButton.icon(
-                key: const Key('download_history'),
-                icon: const Icon(Icons.history),
-                label: const Text('下载历史'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => DownloadHistoryScreen(
-                      repository: repository,
-                      settings: widget.settings,
-                      onParse: widget.onParse,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const Divider(indent: 20, endIndent: 20, height: 12),
           if (selected.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),

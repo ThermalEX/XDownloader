@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xdownloader/app/app.dart';
 import 'package:xdownloader/core/models/download.dart';
 import 'package:xdownloader/features/downloads/download_history_screen.dart';
+import 'package:xdownloader/features/downloads/downloads_screen.dart';
 
 import '../support/app_fixture.dart';
 
@@ -17,6 +18,40 @@ DownloadRequest historyRequest(String id, {bool link = true}) =>
     );
 
 void main() {
+  testWidgets(
+    'download history shares the title row with no body divider',
+    (tester) => withAppFixture(tester, (fixture) async {
+      await tester.pumpWidget(
+        XDownloaderApp(dependencies: fixture.dependencies),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('nav_downloads')));
+      await tester.pumpAndSettle();
+      final action = find.byKey(const Key('download_history'));
+      final title = find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('下载'),
+      );
+      expect(
+        tester.getCenter(action).dy,
+        closeTo(tester.getCenter(title).dy, 1),
+      );
+      expect(
+        tester.getRect(action).left,
+        greaterThan(tester.getRect(title).right),
+      );
+      expect(
+        find.descendant(
+          of: find.byType(DownloadsScreen),
+          matching: find.byType(Divider),
+        ),
+        findsNothing,
+      );
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.byType(DownloadHistoryScreen), findsOneWidget);
+    }),
+  );
   testWidgets(
     'file_delete_keeps_history_and_reparse_uses_post_url',
     (tester) => withAppFixture(tester, (fixture) async {

@@ -11,6 +11,7 @@ import '../core/models/app_update.dart';
 import '../features/home/home_controller.dart';
 import '../features/home/home_screen.dart';
 import '../features/downloads/downloads_screen.dart';
+import '../features/downloads/download_history_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/favorites/favorites_screen.dart';
 import '../features/settings/app_update_dialog.dart';
@@ -298,6 +299,22 @@ class _ShellState extends State<AppShell> with WidgetsBindingObserver {
               title: Text(['XDownloader', '下载', '收藏', '设置'][index]),
               actions: [
                 if (index == 0) HomeSourceAction(controller: home),
+                if (index == 1)
+                  TextButton.icon(
+                    key: const Key('download_history'),
+                    icon: const Icon(Icons.history),
+                    label: const Text('下载历史'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => DownloadHistoryScreen(
+                          repository: widget.dependencies.downloads,
+                          settings: widget.dependencies.settings,
+                          onParse: _share,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (index == 0 &&
                     !widget.dependencies.settings.value.privacyMode)
                   IconButton(
